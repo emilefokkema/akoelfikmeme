@@ -1,0 +1,13 @@
+{
+    "compilerOptions": {
+        "module": "ESNext",
+        "moduleResolution": "bundler",
+        "target": "ESNext",
+        "composite": true,
+        "emitDeclarationOnly": true,
+        "strict": true,
+        "types": [],
+        "lib": [],
+        "verbatimModuleSyntax": true
+    }
+}

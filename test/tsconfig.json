@@ -1,0 +1,17 @@
+{
+    "extends": "../tsconfig-base.json",
+    "compilerOptions": {
+        "outDir": "../dist-types/test",
+        "rootDir": ".",
+        "lib": [
+            "ESNext",
+            "DOM",
+            "DOM.Iterable"
+        ],
+        "skipLibCheck": true,
+    },
+    "references": [
+        {"path": "../src/permutator"}
+    ],
+    "include": ["**/*"]
+}

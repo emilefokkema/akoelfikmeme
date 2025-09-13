@@ -1,0 +1,8 @@
+{
+    "references": [
+        {"path": "./src/permutator"},
+        {"path": "./tsconfig-node.json"},
+        {"path": "./test"}
+    ],
+    "files": []
+}
