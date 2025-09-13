@@ -2,6 +2,7 @@ export type PermutationIndex = readonly number[];
 
 export interface Permutation {
     readonly index: PermutationIndex
+    previous(): Permutation | undefined
     next(): Permutation | undefined
 }
 
@@ -15,6 +16,45 @@ export class PermutationList {
 
 class PermutationImpl implements Permutation {
     constructor(public readonly index: PermutationIndex){}
+
+    previous(): Permutation | undefined {
+        const descendingTail: number[] = [];
+        let indexStartNew = this.index.length - 1;
+        let currentNumber: number | undefined;
+        let firstHigher: number | undefined;
+        while(true){
+            const newNumber = this.index[indexStartNew];
+            if(currentNumber !== undefined && newNumber > currentNumber){
+                firstHigher = newNumber;
+                break;
+            }
+            descendingTail.push(newNumber);
+            currentNumber = newNumber;
+            if(indexStartNew === 0){
+                break;
+            }
+            indexStartNew--;
+        }
+        if(firstHigher === undefined){
+            return undefined;
+        }
+        const newNumbers: number[] = new Array(this.index.length);
+        for(let index = 0; index < indexStartNew; index++){
+            newNumbers[index] = this.index[index];
+        }
+        let lowerFound = false;
+        for(let index = 0; index < descendingTail.length; index++){
+            const tailNumber = descendingTail[index];
+            if(tailNumber < firstHigher && !lowerFound){
+                newNumbers[indexStartNew] = tailNumber;
+                newNumbers[indexStartNew + index + 1] = firstHigher;
+                lowerFound = true;
+                continue;
+            }
+            newNumbers[indexStartNew + index + 1] = tailNumber;
+        }
+        return new PermutationImpl(newNumbers);
+    }
 
     next(): Permutation | undefined {
         const ascendingTail: number[] = [];
@@ -41,13 +81,13 @@ class PermutationImpl implements Permutation {
         for(let index = 0; index < indexStartNew; index++){
             newNumbers[index] = this.index[index];
         }
-        let biggerFound = false;
+        let higherFound = false;
         for(let index = 0; index < ascendingTail.length; index++){
             const tailNumber = ascendingTail[index];
-            if(tailNumber > firstLower && !biggerFound){
+            if(tailNumber > firstLower && !higherFound){
                 newNumbers[indexStartNew] = tailNumber;
                 newNumbers[indexStartNew + index + 1] = firstLower;
-                biggerFound = true;
+                higherFound = true;
                 continue;
             }
             newNumbers[indexStartNew + index + 1] = tailNumber;

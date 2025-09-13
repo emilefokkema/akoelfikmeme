@@ -78,7 +78,9 @@ describe('permutator', () => {
                 currentPermutation = permutationList.getAtIndex(permIndex);
                 expect(currentPermutation?.index).toEqual(permIndex);
             }else{
-                currentPermutation = currentPermutation?.next();
+                const nextPermutation = currentPermutation?.next();
+                expect(nextPermutation?.previous()?.index).toEqual(currentPermutation?.index)
+                currentPermutation = nextPermutation;
                 expect(currentPermutation?.index).toEqual(permIndex);
             }
         }
