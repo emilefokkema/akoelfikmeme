@@ -7,15 +7,20 @@ function initialize(): void {
     input.addEventListener('input', () => {
         console.log('there is input')
     })
+    const totalItems = 10**4;
     const tableData: AnagramTableData<number> = {
         item: 1,
         hasItemsAfterItem(item) {
-            return Promise.resolve(item < 100);
+            return Promise.resolve(item < totalItems);
         },
         getItemsAfterItem(item, nrOfItems) {
             const result: number[] = [];
-            for(let newNumber = item + 1; newNumber <= 100; newNumber++){
-                result.push(newNumber);
+            let itemsAdded = 0;
+            let currentItem = item + 1;
+            while(itemsAdded < nrOfItems && currentItem <= totalItems){
+                result.push(currentItem);
+                itemsAdded++;
+                currentItem++;
             }
             return Promise.resolve(result);
         },

@@ -5,10 +5,18 @@
     </head>
     <body>
         <input type="text"/>
-        <anagram-table></anagram-table>
+        <anagram-table line-height="40"></anagram-table>
         <template id="anagram-table-template">
             <link rel="stylesheet" href="anagram-table.css"/>
-            <div>hello</div>
+            <div id="container">
+                <div id="content"></div>
+            </div>
+        </template>
+        <template id="anagram-table-row-template">
+            <link rel="stylesheet" href="anagram-table-row.css"/>
+            <div id="content">
+                <slot></slot>
+            </div>
         </template>
         <script type="module" src="app/main.ts"></script>
     </body>
