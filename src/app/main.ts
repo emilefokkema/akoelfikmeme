@@ -7,10 +7,10 @@ function initialize(): void {
     input.addEventListener('input', () => {
         console.log('there is input')
     })
-    const totalItems = 10**4;
+    const totalItems = 10**5;
     const tableData: AnagramTableData<number> = {
         items: {
-            items: [5000],
+            items: [50000],
             hasNext: true,
             hasPrevious: true
         },
