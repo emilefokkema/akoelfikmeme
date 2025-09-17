@@ -1,4 +1,4 @@
-export interface AnagramTableItems<TItem> {
+export interface AnagramTableItems<TItem = unknown> {
     items: TItem[]
     hasPrevious: boolean
     hasNext: boolean
@@ -52,6 +52,13 @@ class AnagramTableRow extends HTMLElement {
     }
 }
 
+function createRowForItem(data: AnagramTableData, item: unknown, height: number): AnagramTableRow {
+    const rowElement = document.createElement('anagram-table-row');
+    rowElement.style.height = `${height}px`;
+    rowElement.appendChild(data.renderItem(item));
+    return rowElement;
+}
+
 interface TableRowData<TItem> {
     item: TItem
     hasNext: boolean
@@ -61,6 +68,24 @@ interface TableRowData<TItem> {
 interface TableRowDataWithElement<TItem = unknown> {
     data: TableRowData<TItem>
     element: Element
+}
+
+function *createRows(
+    data: AnagramTableData,
+    {items, hasPrevious, hasNext}: AnagramTableItems,
+    rowHeight: number
+): Iterable<TableRowDataWithElement>{
+    for(let index = 0; index < items.length; index++){
+        const item = items[index];
+        yield {
+            data: {
+                item,
+                hasPrevious: index > 0 || hasPrevious,
+                hasNext: index < items.length - 1 || hasNext
+            },
+            element: createRowForItem(data, item, rowHeight)
+        }
+    }
 }
 
 export class AnagramTable extends HTMLElement {
@@ -75,21 +100,28 @@ export class AnagramTable extends HTMLElement {
     private handleObservedIntersections(entries: IntersectionObserverEntry[]): void {
         for(const {isIntersecting, target} of entries){
             const rowIndex = this.rows.findIndex(r => r.element === target);
-            if(rowIndex === -1){
+            if(rowIndex === -1 || !isIntersecting){
                 continue;
             }
-            if(isIntersecting){
-                if(rowIndex >= this.rows.length - this.numberOfRowsInHeight){
-                    console.log(`row ${rowIndex} is visible, trying to add new rows`)
-                    this.addRowsBelow();
-                    return;
-                }
-                if(rowIndex <= this.numberOfRowsInHeight){
-                    console.log(`row ${rowIndex} is visible, trying to add new rows`)
-                    this.addRowsAbove();
-                    return;
-                }
+            if(rowIndex >= this.rows.length - this.numberOfRowsInHeight){
+                this.addRowsBelow();
+                return;
             }
+            if(rowIndex <= this.numberOfRowsInHeight){
+                this.addRowsAbove();
+                return;
+            }
+        }
+    }
+
+    private spliceRows(startIndex: number, deleteCount: number): void {
+        if(!this.observer){
+            return;
+        }
+        const rowsToRemove = this.rows.splice(startIndex, deleteCount);
+        for(const rowToRemove of rowsToRemove){
+            rowToRemove.element.remove();
+            this.observer.unobserve(rowToRemove.element);
         }
     }
 
@@ -98,46 +130,30 @@ export class AnagramTable extends HTMLElement {
             return;
         }
         const firstRow = this.rows[0];
-        if(!firstRow){
-            return;
-        }
-        if(!firstRow.data.hasPrevious){
-            console.log('no more before', firstRow.data.item)
+        if(!firstRow || !firstRow.data.hasPrevious){
             return;
         }
         this.loading = true;
-        const {items, hasPrevious} = await this.data.getItemsBeforeItem(firstRow.data.item, this.numberOfRowsInHeight);
+        const tableItems = await this.data.getItemsBeforeItem(firstRow.data.item, this.numberOfRowsInHeight);
+        const items = tableItems.items;
         if(items.length === 0){
             return;
         }
         const contentElement = this.shadow.getElementById('content')!;
         let elementToInsertBefore = firstRow.element;
-        for(let index = items.length - 1; index >= 0; index--){
-            const item = items[index];
-            const rowElement = document.createElement('anagram-table-row');
-            rowElement.style.height = `${this.lineHeight}px`;
-            rowElement.appendChild(this.data.renderItem(item));
+        const newRows = [...createRows(this.data, tableItems, this.lineHeight)];
+        for(let index = newRows.length - 1; index >= 0; index--){
+            const newRow = newRows[index];
+            const rowElement = newRow.element;
             contentElement.insertBefore(rowElement, elementToInsertBefore);
             elementToInsertBefore = rowElement;
-            this.rows.unshift({
-                data: {
-                    item,
-                    hasPrevious: index > 0 || hasPrevious,
-                    hasNext: true
-                },
-                element: rowElement
-            })
+            this.rows.unshift(newRow);
             if(index === 0){
-                this.observer.observe(rowElement)
+                this.observer.observe(rowElement);
             }
         }
-        const rowsToRemove = this.rows.splice(this.rows.length - items.length, items.length);
-        for(const rowToRemove of rowsToRemove){
-            rowToRemove.element.remove();
-            this.observer.unobserve(rowToRemove.element);
-        }
+        this.spliceRows(this.rows.length - items.length, items.length);
         this.loading = false;
-        console.log(`Did add rows above. Current number of rows ${this.rows.length}`)
     }
 
     private async addRowsBelow(): Promise<void> {
@@ -145,44 +161,28 @@ export class AnagramTable extends HTMLElement {
             return;
         }
         const lastRow = this.rows[this.rows.length - 1];
-        if(!lastRow){
-            return;
-        }
-        if(!lastRow.data.hasNext){
-            console.log('no more after', lastRow.data.item)
+        if(!lastRow || !lastRow.data.hasNext){
             return;
         }
         this.loading = true;
-        const {items, hasNext} = await this.data.getItemsAfterItem(lastRow.data.item, this.numberOfRowsInHeight);
+        const tableItems = await this.data.getItemsAfterItem(lastRow.data.item, this.numberOfRowsInHeight);
+        const items = tableItems.items;
         if(items.length === 0){
             return;
         }
         const contentElement = this.shadow.getElementById('content')!;
-        for(let index = 0; index < items.length; index++){
-            const item = items[index];
-            const rowElement = document.createElement('anagram-table-row');
-            rowElement.style.height = `${this.lineHeight}px`;
-            rowElement.appendChild(this.data.renderItem(item));
+        const newRows = [...createRows(this.data, tableItems, this.lineHeight)]
+        for(let index = 0; index < newRows.length; index++){
+            const newRow = newRows[index];
+            const rowElement = newRow.element;
             contentElement.appendChild(rowElement);
-            this.rows.push({
-                data: {
-                    item,
-                    hasPrevious: true,
-                    hasNext: index < items.length - 1 || hasNext
-                },
-                element: rowElement
-            })
+            this.rows.push(newRow);
             if(index === 0){
-                this.observer.observe(rowElement)
+                this.observer.observe(rowElement);
             }
         }
-        const rowsToRemove = this.rows.splice(0, items.length);
-        for(const rowToRemove of rowsToRemove){
-            rowToRemove.element.remove();
-            this.observer.unobserve(rowToRemove.element);
-        }
+        this.spliceRows(0, items.length)
         this.loading = false;
-        console.log(`Did add rows below. Current number of rows ${this.rows.length}`)
     }
 
     protected connectedCallback(){
@@ -207,48 +207,27 @@ export class AnagramTable extends HTMLElement {
         if(!this.shadow || !this.observer){
             return;
         }
+        this.spliceRows(0, this.rows.length);
         this.data = data;
         const { hasPrevious, hasNext, items } = data.items;
         let nrOfItemsBefore = 0;
-        const allItems: TableRowData<TItem>[] = [];
         if(hasPrevious){
             const itemsBefore = await data.getItemsBeforeItem(items[0], 2 * this.numberOfRowsInHeight);
-            allItems.push(...itemsBefore.items.map((item, index) => ({
-                item,
-                hasNext: true,
-                hasPrevious: index > 0 || itemsBefore.hasPrevious
-            })));
+            this.rows.push(...createRows(data, itemsBefore, this.lineHeight));
             nrOfItemsBefore = itemsBefore.items.length;
         }
-        allItems.push(...items.map((item, index) => ({
-            item,
-            hasNext: index < items.length - 1 || hasNext,
-            hasPrevious: index > 0 || hasPrevious
-        })));
+        this.rows.push(...createRows(data, data.items, this.lineHeight));
         const tooFew = 3 * this.numberOfRowsInHeight - items.length;
         if(tooFew > 0 && hasNext){
             const itemsAfter = await data.getItemsAfterItem(items[items.length - 1], tooFew);
-            allItems.push(...itemsAfter.items.map((item, index) => ({
-                item,
-                hasPrevious: true,
-                hasNext: index < itemsAfter.items.length - 1 || itemsAfter.hasNext
-            })))
+            this.rows.push(...createRows(data, itemsAfter, this.lineHeight));
         }
-        console.log('number of items', allItems.length)
-        const nrOfRowsBefore = Math.min(Math.max(0, allItems.length - this.numberOfRowsInHeight), nrOfItemsBefore);
+        const nrOfRowsBefore = Math.min(Math.max(0, this.rows.length - this.numberOfRowsInHeight), nrOfItemsBefore);
         const contentElement = this.shadow.getElementById('content')!;
         const containerElement = this.shadow.getElementById('container')!;
-        for(const item of allItems){
-            const rowElement = document.createElement('anagram-table-row');
-            rowElement.style.height = `${this.lineHeight}px`;
-            rowElement.appendChild(data.renderItem(item.item));
-            contentElement.appendChild(rowElement);
-            this.rows.push({
-                data: item,
-                element: rowElement
-            });
+        for(const row of this.rows){
+            contentElement.appendChild(row.element);
         }
-        
         const scrollTop = this.lineHeight * nrOfRowsBefore;
         await scrollElement(containerElement, scrollTop);
         for(let index = 0; index < this.rows.length; index += this.numberOfRowsInHeight){
