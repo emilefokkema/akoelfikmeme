@@ -14,7 +14,7 @@ function initialize(): void {
             hasNext: true,
             hasPrevious: true
         },
-        getItemsAfterItem(item, nrOfItems) {
+        async getItemsAfterItem(item, nrOfItems) {
             const result: number[] = [];
             let itemsAdded = 0;
             let currentItem = item;
@@ -23,13 +23,14 @@ function initialize(): void {
                 result.push(currentItem);
                 itemsAdded++;
             }
-            return Promise.resolve({
+            await new Promise<void>((resolve) => setTimeout(resolve, 200));
+            return {
                 items: result,
                 hasNext: currentItem < totalItems,
                 hasPrevious: true
-            });
+            };
         },
-        getItemsBeforeItem(item, nrOfItems) {
+        async getItemsBeforeItem(item, nrOfItems) {
             const result: number[] = [];
             let itemsAdded = 0;
             let currentItem = item;
@@ -38,7 +39,8 @@ function initialize(): void {
                 result.unshift(currentItem);
                 itemsAdded++;
             }
-            return Promise.resolve({
+            await new Promise<void>((resolve) => setTimeout(resolve, 200));
+            return {
                 items: result,
                 hasNext: true,
                 hasPrevious: currentItem > 0

@@ -134,7 +134,9 @@ export class AnagramTable extends HTMLElement {
             return;
         }
         this.loading = true;
+        const containerElement = this.shadow.getElementById('container')!;
         const tableItems = await this.data.getItemsBeforeItem(firstRow.data.item, this.numberOfRowsInHeight);
+        const scrollTop = containerElement.scrollTop;
         const items = tableItems.items;
         if(items.length === 0){
             return;
@@ -148,11 +150,16 @@ export class AnagramTable extends HTMLElement {
             contentElement.insertBefore(rowElement, elementToInsertBefore);
             elementToInsertBefore = rowElement;
             this.rows.unshift(newRow);
+        }
+        this.spliceRows(this.rows.length - items.length, items.length);
+        const desiredScrollTop = scrollTop + newRows.length * this.lineHeight;
+        await scrollElement(containerElement, desiredScrollTop);
+        for(let index = newRows.length - 1; index >= 0; index--){
+            const rowElement = newRows[index].element;
             if(index === 0){
                 this.observer.observe(rowElement);
             }
         }
-        this.spliceRows(this.rows.length - items.length, items.length);
         this.loading = false;
     }
 
