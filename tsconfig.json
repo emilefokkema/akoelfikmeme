@@ -2,6 +2,7 @@
     "references": [
         {"path": "./src/permutator"},
         {"path": "./src/app"},
+        {"path": "./src/worker"},
         {"path": "./tsconfig-node.json"},
         {"path": "./test"}
     ],

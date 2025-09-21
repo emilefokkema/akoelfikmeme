@@ -3,7 +3,9 @@ import type { AnagramTableData } from './anagram-table';
 
 function initialize(): void {
     const input = document.querySelector('input')!;
-    const table = document.querySelector('anagram-table')!
+    const table = document.querySelector('anagram-table')!;
+    const worker = new Worker('../worker/main.ts');
+    worker.postMessage('blah')
     input.addEventListener('input', () => {
         console.log('there is input')
     })
@@ -44,7 +46,7 @@ function initialize(): void {
                 items: result,
                 hasNext: true,
                 hasPrevious: currentItem > 0
-            });
+            };
         },
         renderItem(item) {
             const span = document.createElement('span');
