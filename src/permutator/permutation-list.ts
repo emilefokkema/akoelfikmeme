@@ -1,23 +1,17 @@
-export type PermutationIndex = readonly number[];
+type PermutationIndex = readonly number[];
+export type PermutationValue = readonly number[];
+
 
 export interface Permutation {
-    readonly index: PermutationIndex
+    readonly value: PermutationValue
     previous(): Permutation | undefined
     next(): Permutation | undefined
 }
 
-export class PermutationList {
-    constructor(private readonly numberOfElements: number){}
-
-    getAtIndex(index: PermutationIndex): Permutation | undefined {
-        return PermutationImpl.tryCreate(this.numberOfElements, index)
-    }
-}
-
-class PermutationImpl implements Permutation {
+class UniqueValuePermutation {
     constructor(public readonly index: PermutationIndex){}
 
-    previous(): Permutation | undefined {
+    previous(): UniqueValuePermutation | undefined {
         const descendingTail: number[] = [];
         let indexStartNew = this.index.length - 1;
         let currentNumber: number | undefined;
@@ -53,10 +47,10 @@ class PermutationImpl implements Permutation {
             }
             newNumbers[indexStartNew + index + 1] = tailNumber;
         }
-        return new PermutationImpl(newNumbers);
+        return new UniqueValuePermutation(newNumbers);
     }
 
-    next(): Permutation | undefined {
+    next(): UniqueValuePermutation | undefined {
         const ascendingTail: number[] = [];
         let indexStartNew = this.index.length - 1;
         let currentNumber: number | undefined;
@@ -92,10 +86,10 @@ class PermutationImpl implements Permutation {
             }
             newNumbers[indexStartNew + index + 1] = tailNumber;
         }
-        return new PermutationImpl(newNumbers);
+        return new UniqueValuePermutation(newNumbers);
     }
 
-    static tryCreate(size: number, index: PermutationIndex): PermutationImpl | undefined {
+    static earliestStartingWith(size: number, index: PermutationIndex): UniqueValuePermutation | undefined {
         const allNumbers = Array.apply(null, new Array(size)).map((_, index) => index);
         const result: number[] = [];
         for(const indexNumber of index){
@@ -109,6 +103,183 @@ class PermutationImpl implements Permutation {
         if(allNumbers.length > 0){
             result.splice(result.length, 0, ...allNumbers);
         }
-        return new PermutationImpl(result);
+        return new UniqueValuePermutation(result);
+    }
+
+    static latestStartingWith(size: number, index: PermutationIndex): UniqueValuePermutation | undefined {
+        const allNumbers = Array.apply(null, new Array(size)).map((_, index) => size - 1 - index);
+        const result: number[] = [];
+        for(const indexNumber of index){
+            const numberIndex = allNumbers.indexOf(indexNumber);
+            if(numberIndex === -1){
+                return undefined;
+            }
+            allNumbers.splice(numberIndex, 1);
+            result.push(indexNumber);
+        }
+        if(allNumbers.length > 0){
+            result.splice(result.length, 0, ...allNumbers);
+        }
+        return new UniqueValuePermutation(result);
+    }
+}
+
+function createValueMap(values: PermutationValue): PermutableValue[] {
+    const result: PermutableValue[] = new Array(values.length);
+    const duplicateIndicesMap = new Map<number, number[]>();
+    for(let index = 0; index < values.length; index++){
+        const value = values[index];
+        const duplicateIndices: number[] = duplicateIndicesMap.get(value) || [];
+        duplicateIndices.push(index);
+        duplicateIndicesMap.set(value, duplicateIndices)
+        result[index] = {
+            value,
+            duplicateIndices
+        }
+    }
+    for(let index = 0; index < values.length; index++){
+        const {value, duplicateIndices} = result[index];
+        result[index] = {
+            value,
+            duplicateIndices: duplicateIndices && duplicateIndices.length > 1
+                ? duplicateIndices.filter(v => v !== index)
+                : undefined
+        }
+    }
+    return result;
+}
+
+class PermutationImpl implements Permutation {
+    constructor(
+        public readonly value: PermutationValue,
+        private readonly permutation: UniqueValuePermutation,
+        private readonly valueMap: PermutableValue[]
+    ){}
+
+    private findIndexOfDuplication(permutation: UniqueValuePermutation): number {
+        const values = permutation.index;
+        const valuesSeen: number[] = [];
+        let result = -1;
+        for(let index = values.length - 1; index >= 0; index--){
+            const permValueAtIndex = values[index];
+            const { duplicateIndices } = this.valueMap[permValueAtIndex];
+            if(!duplicateIndices){
+                valuesSeen.push(permValueAtIndex);
+                continue;
+            }
+            if(duplicateIndices.some(i => i < permValueAtIndex && valuesSeen.includes(i))){
+                result = index;
+            }
+            valuesSeen.push(permValueAtIndex)
+        }
+        return result;
+    }
+
+    private getNextWithoutDuplicates(permutation: UniqueValuePermutation): UniqueValuePermutation | undefined {
+        let candidate = permutation;
+        let indexOfDuplication: number;
+        while((indexOfDuplication = this.findIndexOfDuplication(candidate)) > -1){
+            const nextCandidate = UniqueValuePermutation
+                .latestStartingWith(
+                    candidate.index.length,
+                    candidate.index.slice(0, indexOfDuplication + 1)
+                )!
+                .next();
+            if(!nextCandidate){
+                return undefined;
+            }
+            candidate = nextCandidate;
+        }
+        return candidate;
+    }
+
+    private getPreviousWithoutDuplicates(permutation: UniqueValuePermutation): UniqueValuePermutation | undefined {
+        let candidate = permutation;
+        let indexOfDuplication: number;
+        while((indexOfDuplication = this.findIndexOfDuplication(candidate)) > -1){
+            const nextCandidate = UniqueValuePermutation
+                .earliestStartingWith(
+                    candidate.index.length,
+                    candidate.index.slice(0, indexOfDuplication + 1)
+                )!
+                .previous();
+            if(!nextCandidate){
+                return undefined;
+            }
+            candidate = nextCandidate;
+        }
+        return candidate;
+    }
+
+    next(): Permutation | undefined {
+        let uniquePermutationNext = this.permutation.next();
+        if(!uniquePermutationNext){
+            return undefined;
+        }
+        uniquePermutationNext = this.getNextWithoutDuplicates(uniquePermutationNext);
+        if(!uniquePermutationNext){
+            return undefined;
+        }
+        return PermutationImpl.fromUniquePermutation(uniquePermutationNext, this.valueMap);
+    }
+
+    previous(): Permutation | undefined {
+        let uniquePermutationPrevious = this.permutation.previous();
+        if(!uniquePermutationPrevious){
+            return undefined;
+        }
+        uniquePermutationPrevious = this.getPreviousWithoutDuplicates(uniquePermutationPrevious);
+        if(!uniquePermutationPrevious){
+            return undefined;
+        }
+        return PermutationImpl.fromUniquePermutation(uniquePermutationPrevious, this.valueMap);
+    }
+
+    private static fromUniquePermutation(permutation: UniqueValuePermutation, valueMap: PermutableValue[]): PermutationImpl {
+        const permValues = permutation.index;
+        const length = permValues.length;
+        
+        const nextValues: number[] = new Array(length);
+        for(let index = 0; index < length; index++){
+            const permValueAtIndex = permValues[index];
+            nextValues[index] = valueMap[permValueAtIndex].value;
+        }
+
+        return new PermutationImpl(nextValues, permutation, valueMap);
+    }
+}
+
+interface PermutableValue {
+    value: number
+    duplicateIndices: number[] | undefined
+}
+export class PermutationList {
+    private readonly valueMap: PermutableValue[]
+    constructor(value: PermutationValue){
+        this.valueMap = createValueMap(value);
+    }
+
+    getPermutation(values: PermutationValue): Permutation | undefined {
+        const indices: number[] = new Array(values.length);
+        const indicesUsed = new Set<number>();
+        first:for(let valueIndex = 0; valueIndex < values.length; valueIndex++){
+            const value = values[valueIndex];
+            for(let index = 0; index < this.valueMap.length; index++){
+                const {value: valueAtIndex} = this.valueMap[index];
+                if(valueAtIndex !== value || indicesUsed.has(index)){
+                    continue;
+                }
+                indices[valueIndex] = index;
+                indicesUsed.add(index);
+                continue first;
+            }
+            return undefined;
+        }
+        const uniqueValuePermutation = UniqueValuePermutation.earliestStartingWith(this.valueMap.length, indices);
+        if(!uniqueValuePermutation){
+            return undefined;
+        }
+        const valuesToUse = uniqueValuePermutation.index.map(i => this.valueMap[i].value)
+        return new PermutationImpl(valuesToUse, uniqueValuePermutation, this.valueMap)
     }
 }

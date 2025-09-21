@@ -4,27 +4,29 @@ import { PermutationList, type Permutation } from '../src/permutator/permutation
 describe('permutator', () => {
 
     it('a permutation should have numbers', () => {
-        expect(new PermutationList(1).getAtIndex([0])?.index).toEqual([0])
-        expect(new PermutationList(1).getAtIndex([])?.index).toEqual([0]);
-        expect(new PermutationList(1).getAtIndex([1])).toBeUndefined();
+        const listOfOne = new PermutationList([0]);
+        expect(listOfOne.getPermutation([0])?.value).toEqual([0])
+        expect(listOfOne.getPermutation([])?.value).toEqual([0]);
+        expect(listOfOne.getPermutation([1])).toBeUndefined();
 
-        expect(new PermutationList(2).getAtIndex([0])?.index).toEqual([0, 1]);
-        expect(new PermutationList(2).getAtIndex([1, 0])?.index).toEqual([1, 0]);
-        expect(new PermutationList(2).getAtIndex([0, 1])?.index).toEqual([0, 1]);
-        expect(new PermutationList(2).getAtIndex([0])?.index).toEqual([0, 1]);
-        expect(new PermutationList(2).getAtIndex([1])?.index).toEqual([1, 0]);
+        const listOfTwo = new PermutationList([0, 1]);
+        expect(listOfTwo.getPermutation([0])?.value).toEqual([0, 1]);
+        expect(listOfTwo.getPermutation([1, 0])?.value).toEqual([1, 0]);
+        expect(listOfTwo.getPermutation([0, 1])?.value).toEqual([0, 1]);
+        expect(listOfTwo.getPermutation([1])?.value).toEqual([1, 0]);
 
-        expect(new PermutationList(4).getAtIndex([1, 3])?.index).toEqual([1, 3, 0, 2])
-        expect(new PermutationList(4).getAtIndex([1, 4])).toBeUndefined();
+        const listOfFour = new PermutationList([0, 1, 2, 3])
+        expect(listOfFour.getPermutation([1, 3])?.value).toEqual([1, 3, 0, 2])
+        expect(listOfFour.getPermutation([1, 4])).toBeUndefined();
     })
 
     it('a permutation should have no next', () => {
-        expect(new PermutationList(2).getAtIndex([1, 0])?.next()).toBeUndefined();
+        expect(new PermutationList([0, 1]).getPermutation([1, 0])?.next()).toBeUndefined();
     })
 
     it('a permutation should have a next', () => {
-        expect(new PermutationList(2).getAtIndex([0, 1])?.next()?.index).toEqual([1, 0])
-        expect(new PermutationList(3).getAtIndex([0, 1, 2])?.next()?.index).toEqual([0, 2, 1])
+        expect(new PermutationList([0, 1]).getPermutation([0, 1])?.next()?.value).toEqual([1, 0])
+        expect(new PermutationList([0, 1, 2]).getPermutation([0, 1, 2])?.next()?.value).toEqual([0, 2, 1])
     })
 
     it.each([
@@ -69,19 +71,58 @@ describe('permutator', () => {
             [3, 2, 0, 1],
             [3, 2, 1, 0],
         ]],
+        [[
+            [1, 1]
+        ]],
+        [[
+            [1, 1, 1, 1]
+        ]],
+        [[
+            [1, 2, 3, 1],
+            [1, 2, 1, 3],
+            [1, 3, 2, 1],
+            [1, 3, 1, 2],
+            [1, 1, 2, 3],
+            [1, 1, 3, 2],
+            [2, 1, 3, 1],
+            [2, 1, 1, 3],
+            [2, 3, 1, 1],
+            [3, 1, 2, 1],
+            [3, 1, 1, 2],
+            [3, 2, 1, 1]
+        ]],
+        [[
+            [1, 1, 2, 2, 2],
+            [1, 2, 1, 2, 2],
+            [1, 2, 2, 1, 2],
+            [1, 2, 2, 2, 1],
+            [2, 1, 1, 2, 2],
+            [2, 1, 2, 1, 2],
+            [2, 1, 2, 2, 1],
+            [2, 2, 1, 1, 2],
+            [2, 2, 1, 2, 1],
+            [2, 2, 2, 1, 1]
+        ]],
+        [[
+            [2, 3, 3],
+            [3, 2, 3],
+            [3, 3, 2]
+        ]]
     ])('should create sequences', (list) => {
-        const permutationList = new PermutationList(list[0].length);
         let currentPermutation: Permutation | undefined;
         for(let i = 0; i < list.length; i++){
             const permIndex = list[i];
             if(i === 0){
-                currentPermutation = permutationList.getAtIndex(permIndex);
-                expect(currentPermutation?.index).toEqual(permIndex);
+                currentPermutation = new PermutationList(permIndex).getPermutation(permIndex);
+                expect(currentPermutation?.value).toEqual(permIndex);
             }else{
                 const nextPermutation = currentPermutation?.next();
-                expect(nextPermutation?.previous()?.index).toEqual(currentPermutation?.index)
+                expect(nextPermutation?.previous()?.value).toEqual(currentPermutation?.value)
                 currentPermutation = nextPermutation;
-                expect(currentPermutation?.index).toEqual(permIndex);
+                expect(currentPermutation?.value).toEqual(permIndex);
+            }
+            if(i === list.length - 1){
+                expect(currentPermutation?.next()).toBeUndefined();
             }
         }
     })
