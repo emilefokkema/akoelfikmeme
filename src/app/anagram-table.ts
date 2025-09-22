@@ -22,6 +22,26 @@ function whenElementScrolled(element: Element, signal: AbortSignal): Promise<voi
     })
 }
 
+function waitForAnimationFrameWhen<T>(calculate: () => T, predicate: (v: T) => boolean, maxRetries: number): Promise<T> {
+    return new Promise<T>((res, rej) => {
+        let triesLeft = maxRetries;
+        check();
+        function check(): void {
+            const value = calculate();
+            if(predicate(value)){
+                res(value);
+                return;
+            }
+            triesLeft--;
+            if(triesLeft === 0){
+                rej(new Error(`After ${maxRetries} tries, predicate did not become true`));
+                return;
+            }
+            requestAnimationFrame(check);
+        }
+    })
+}
+
 function waitMs(ms: number): Promise<void> {
     return new Promise(res => setTimeout(res, ms))
 }
@@ -113,7 +133,7 @@ function *createRows(
 export class AnagramTable extends HTMLElement {
     private lineHeight: number = 20;
     private shadow: ShadowRoot | undefined;
-    private numberOfRowsInHeight: number = 1;
+    private numberOfRowsInHeight: number | undefined;
     private observer: IntersectionObserver | undefined;
     private data: AnagramTableData | undefined;
     private rows: TableRowDataWithElement[] = [];
@@ -121,6 +141,9 @@ export class AnagramTable extends HTMLElement {
     private queuedAddRowsAbove = queued(() => this.addRowsAbove());
 
     private handleObservedIntersections(entries: IntersectionObserverEntry[]): void {
+        if(this.numberOfRowsInHeight === undefined){
+            return;
+        }
         for(const {isIntersecting, target} of entries){
             const rowIndex = this.rows.findIndex(r => r.element === target);
             if(rowIndex === -1 || !isIntersecting){
@@ -137,6 +160,14 @@ export class AnagramTable extends HTMLElement {
         }
     }
 
+    private async tryCalculateNumberOfRowsInHeight(): Promise<void> {
+        const {height} = await waitForAnimationFrameWhen(() => this.getBoundingClientRect(), ({height}) => height > 0, 20);
+        if(height === 0){
+            return;
+        }
+        this.numberOfRowsInHeight = Math.ceil(height / this.lineHeight);
+    }
+
     private spliceRows(startIndex: number, deleteCount: number): void {
         if(!this.observer){
             return;
@@ -149,9 +180,10 @@ export class AnagramTable extends HTMLElement {
     }
 
     private async addRowsAbove(): Promise<void> {
-        if(this.loading || !this.data || !this.shadow || !this.observer){
+        if(this.loading || !this.data || !this.shadow || !this.observer || this.numberOfRowsInHeight === undefined){
             return;
         }
+        
         const firstRow = this.rows[0];
         if(!firstRow || !firstRow.data.hasPrevious){
             return;
@@ -187,7 +219,7 @@ export class AnagramTable extends HTMLElement {
     }
 
     private async addRowsBelow(): Promise<void> {
-        if(this.loading || !this.data || !this.shadow || !this.observer){
+        if(this.loading || !this.data || !this.shadow || !this.observer || this.numberOfRowsInHeight === undefined){
             return;
         }
         const lastRow = this.rows[this.rows.length - 1];
@@ -225,8 +257,7 @@ export class AnagramTable extends HTMLElement {
         if(lineHeightAttributeValue !== null){
             this.lineHeight = Number(lineHeightAttributeValue);
         }
-        const {height} = this.getBoundingClientRect();
-        this.numberOfRowsInHeight = Math.ceil(height / this.lineHeight);
+        
         const containerElement = shadow.getElementById('container')!;
         this.observer = new IntersectionObserver((entries) => this.handleObservedIntersections(entries), {
             root: containerElement
@@ -235,6 +266,10 @@ export class AnagramTable extends HTMLElement {
 
     public async setData<TItem>(data: AnagramTableData<TItem>): Promise<void> {
         if(!this.shadow || !this.observer){
+            return;
+        }
+        await this.tryCalculateNumberOfRowsInHeight();
+        if(this.numberOfRowsInHeight === undefined){
             return;
         }
         this.spliceRows(0, this.rows.length);
