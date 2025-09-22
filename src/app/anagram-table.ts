@@ -70,6 +70,28 @@ interface TableRowDataWithElement<TItem = unknown> {
     element: Element
 }
 
+function queued(fn: () => Promise<void>): () => void {
+    let nrQueued = 0;
+    let running = false;
+    return () => run();
+    async function run(): Promise<void> {
+        if(running){
+            nrQueued++;
+            return;
+        }
+        if(nrQueued > 0){
+            nrQueued--;
+        }
+        running = true;
+        await fn();
+        running = false;
+        if(nrQueued === 0){
+            return;
+        }
+        run();
+    }
+}
+
 function *createRows(
     data: AnagramTableData,
     {items, hasPrevious, hasNext}: AnagramTableItems,
@@ -96,6 +118,7 @@ export class AnagramTable extends HTMLElement {
     private data: AnagramTableData | undefined;
     private rows: TableRowDataWithElement[] = [];
     private loading = false;
+    private queuedAddRowsAbove = queued(() => this.addRowsAbove());
 
     private handleObservedIntersections(entries: IntersectionObserverEntry[]): void {
         for(const {isIntersecting, target} of entries){
@@ -108,7 +131,7 @@ export class AnagramTable extends HTMLElement {
                 return;
             }
             if(rowIndex <= this.numberOfRowsInHeight){
-                this.addRowsAbove();
+                this.queuedAddRowsAbove();
                 return;
             }
         }
