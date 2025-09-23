@@ -6,12 +6,7 @@ body {
     height: 100vh;
 }
 
-.table-container {
+.list-container {
     flex-grow: 1;
     min-height: 0;
-}
-
-anagram-table {
-    display: block;
-    height: 100%;
 }

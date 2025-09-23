@@ -1,5 +1,5 @@
 import './very-long-list';
-import type { VeryLongListData } from './very-long-list';
+import type { VeryLongListData } from './very-long-list-data';
 
 function initialize(): void {
     const input = document.querySelector('input')!;
