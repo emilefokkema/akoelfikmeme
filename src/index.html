@@ -6,17 +6,17 @@
     <body>
         <input type="text"/>
         <div class="table-container">
-            <anagram-table line-height="40"></anagram-table>
+            <very-long-list item-height="40"></very-long-list>
         </div>
 
-        <template id="anagram-table-template">
-            <link rel="stylesheet" href="anagram-table.css"/>
+        <template id="very-long-list-template">
+            <link rel="stylesheet" href="very-long-list.css"/>
             <div id="container">
                 <div id="content"></div>
             </div>
         </template>
-        <template id="anagram-table-row-template">
-            <link rel="stylesheet" href="anagram-table-row.css"/>
+        <template id="very-long-list-item-template">
+            <link rel="stylesheet" href="very-long-list-item.css"/>
             <div id="content">
                 <slot></slot>
             </div>

@@ -1,16 +1,16 @@
-import './anagram-table';
-import type { AnagramTableData } from './anagram-table';
+import './very-long-list';
+import type { VeryLongListData } from './very-long-list';
 
 function initialize(): void {
     const input = document.querySelector('input')!;
-    const table = document.querySelector('anagram-table')!;
+    const list = document.querySelector('very-long-list')!;
     const worker = new Worker('../worker/main.ts');
     worker.postMessage('blah')
     input.addEventListener('input', () => {
         console.log('there is input')
     })
     const totalItems = 10**5;
-    const tableData: AnagramTableData<number> = {
+    const tableData: VeryLongListData<number> = {
         items: {
             items: [50000],
             hasNext: true,
@@ -54,7 +54,7 @@ function initialize(): void {
             return span;
         },
     }
-    table.setData(tableData);
+    list.setData(tableData);
 }
 
 initialize();
