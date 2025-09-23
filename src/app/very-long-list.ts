@@ -61,9 +61,8 @@ class VeryLongListItem extends HTMLElement {
     }
 }
 
-function createItemElement(data: VeryLongListData, item: unknown, height: number): VeryLongListItem {
+function createItemElement(data: VeryLongListData, item: unknown): VeryLongListItem {
     const itemElement = document.createElement('very-long-list-item');
-    itemElement.style.height = `${height}px`;
     itemElement.appendChild(data.renderItem(item));
     return itemElement;
 }
@@ -103,8 +102,7 @@ function queued(fn: () => Promise<void>): () => void {
 
 function *createItemsWithElements(
     data: VeryLongListData,
-    {items, hasPrevious, hasNext}: VeryLongListItems,
-    rowHeight: number
+    {items, hasPrevious, hasNext}: VeryLongListItems
 ): Iterable<ItemDataWithElement>{
     for(let index = 0; index < items.length; index++){
         const item = items[index];
@@ -114,7 +112,7 @@ function *createItemsWithElements(
                 hasPrevious: index > 0 || hasPrevious,
                 hasNext: index < items.length - 1 || hasNext
             },
-            element: createItemElement(data, item, rowHeight)
+            element: createItemElement(data, item)
         }
     }
 }
@@ -149,14 +147,6 @@ export class VeryLongList extends HTMLElement {
         }
     }
 
-    private async tryCalculateNumberOfItemsInHeight(): Promise<void> {
-        const {height} = await waitForAnimationFrameWhen(() => this.getBoundingClientRect(), ({height}) => height > 0, 20);
-        if(height === 0){
-            return;
-        }
-        this.numberOfItemsInHeight = Math.ceil(height / this.itemHeight);
-    }
-
     private spliceItems(startIndex: number, deleteCount: number): void {
         if(!this.observer){
             return;
@@ -185,16 +175,8 @@ export class VeryLongList extends HTMLElement {
         if(items.length === 0){
             return;
         }
-        const contentElement = this.shadow.getElementById('content')!;
-        let elementToInsertBefore = firstItem.element;
-        const newItems = [...createItemsWithElements(this.data, listItems, this.itemHeight)];
-        for(let index = newItems.length - 1; index >= 0; index--){
-            const newItem = newItems[index];
-            const itemElement = newItem.element;
-            contentElement.insertBefore(itemElement, elementToInsertBefore);
-            elementToInsertBefore = itemElement;
-            this.items.unshift(newItem);
-        }
+        const newItems = [...createItemsWithElements(this.data, listItems)];
+        this.prependItems(newItems, firstItem.element);
         this.spliceItems(this.items.length - items.length, items.length);
         const desiredScrollTop = scrollTop + newItems.length * this.itemHeight;
         await scrollElement(containerElement, desiredScrollTop);
@@ -222,7 +204,7 @@ export class VeryLongList extends HTMLElement {
             return;
         }
         const contentElement = this.shadow.getElementById('content')!;
-        const newItems = [...createItemsWithElements(this.data, listItems, this.itemHeight)]
+        const newItems = [...createItemsWithElements(this.data, listItems)]
         for(let index = 0; index < newItems.length; index++){
             const newItem = newItems[index];
             const itemElement = newItem.element;
@@ -242,10 +224,6 @@ export class VeryLongList extends HTMLElement {
         const shadow = this.attachShadow({mode: 'open'});
         shadow.appendChild(content);
         this.shadow = shadow;
-        const itemHeightAttributeValue = this.getAttribute('item-height');
-        if(itemHeightAttributeValue !== null){
-            this.itemHeight = Number(itemHeightAttributeValue);
-        }
         
         const containerElement = shadow.getElementById('container')!;
         this.observer = new IntersectionObserver((entries) => this.handleObservedIntersections(entries), {
@@ -253,35 +231,60 @@ export class VeryLongList extends HTMLElement {
         })
     }
 
-    public async setData<TItem>(data: VeryLongListData<TItem>): Promise<void> {
-        if(!this.shadow || !this.observer){
+    private prependItems(items: ItemDataWithElement[], firstItemElement: Element): void {
+        if(!this.shadow){
             return;
         }
-        await this.tryCalculateNumberOfItemsInHeight();
-        if(this.numberOfItemsInHeight === undefined){
-            return;
+        let elementToInsertBefore = firstItemElement;
+        const contentElement = this.shadow.getElementById('content')!;
+        for(let index = items.length - 1; index >= 0; index--){
+            const newItem = items[index];
+            const itemElement = newItem.element;
+            contentElement.insertBefore(itemElement, elementToInsertBefore);
+            elementToInsertBefore = itemElement;
+            this.items.unshift(newItem);
         }
+    }
+
+    public async setData<TItem>(data: VeryLongListData<TItem>): Promise<void>{
         this.spliceItems(0, this.items.length);
         this.data = data;
         const { hasPrevious, hasNext, items } = data.items;
-        let nrOfItemsBefore = 0;
-        if(hasPrevious){
-            const itemsBefore = await data.getItemsBeforeItem(items[0], 2 * this.numberOfItemsInHeight);
-            this.items.push(...createItemsWithElements(data, itemsBefore, this.itemHeight));
-            nrOfItemsBefore = itemsBefore.items.length;
+        if(items.length === 0 || !this.shadow || !this.observer){
+            return;
         }
-        this.items.push(...createItemsWithElements(data, data.items, this.itemHeight));
-        const tooFew = 3 * this.numberOfItemsInHeight - items.length;
-        if(tooFew > 0 && hasNext){
-            const itemsAfter = await data.getItemsAfterItem(items[items.length - 1], tooFew);
-            this.items.push(...createItemsWithElements(data, itemsAfter, this.itemHeight));
+        const {height} = await waitForAnimationFrameWhen(() => this.getBoundingClientRect(), ({height}) => height > 0, 20);
+        if(height === 0){
+            return;
         }
-        nrOfItemsBefore = Math.min(Math.max(0, this.items.length - this.numberOfItemsInHeight), nrOfItemsBefore);
         const contentElement = this.shadow.getElementById('content')!;
-        const containerElement = this.shadow.getElementById('container')!;
+        this.items.push(...createItemsWithElements(data, data.items));
         for(const item of this.items){
             contentElement.appendChild(item.element);
         }
+        const firstItemElement = this.items[0].element;
+        const {height: itemHeight} = await waitForAnimationFrameWhen(() => firstItemElement.getBoundingClientRect(), ({height}) => height > 0, 20);
+        this.itemHeight = itemHeight;
+        const numberOfItemsInHeight = Math.ceil(height / itemHeight);
+        this.numberOfItemsInHeight = numberOfItemsInHeight;
+        let nrOfItemsBefore = 0;
+        if(hasPrevious){
+            const itemsBefore = await data.getItemsBeforeItem(items[0], 2 * numberOfItemsInHeight);
+            const itemsWithElementsBefore = [...createItemsWithElements(data, itemsBefore)];
+            this.prependItems(itemsWithElementsBefore, firstItemElement);
+            nrOfItemsBefore = itemsBefore.items.length;
+        }
+        const tooFew = 3 * numberOfItemsInHeight - items.length;
+        if(tooFew > 0 && hasNext){
+            const itemsAfter = await data.getItemsAfterItem(items[items.length - 1], tooFew);
+            const itemsWithElementsAfter = [...createItemsWithElements(data, itemsAfter)];
+            this.items.push(...itemsWithElementsAfter);
+            for(const item of itemsWithElementsAfter){
+                contentElement.appendChild(item.element);
+            }
+        }
+        nrOfItemsBefore = Math.min(Math.max(0, this.items.length - numberOfItemsInHeight), nrOfItemsBefore);
+        const containerElement = this.shadow.getElementById('container')!;
         const scrollTop = this.itemHeight * nrOfItemsBefore;
         await scrollElement(containerElement, scrollTop);
         for(let index = 0; index < this.items.length; index += this.numberOfItemsInHeight){
