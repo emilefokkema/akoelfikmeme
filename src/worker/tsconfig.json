@@ -8,5 +8,8 @@
         "rootDir": ".",
         "outDir": "../../dist-types/src/worker"
     },
-    "include": ["**/*"]
+    "include": ["**/*"],
+    "references": [
+        {"path": "../shared"}
+    ]
 }

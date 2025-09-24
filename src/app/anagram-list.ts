@@ -1,4 +1,5 @@
 import type { VeryLongListData } from "./very-long-list-data"
+import { createWorkerRequests } from "./worker-requests"
 
 export type AnagramElements = string[]
 export interface AnagramListItem {
@@ -7,16 +8,19 @@ export interface AnagramListItem {
 }
 
 export interface AnagramList {
-    setElements(elements: AnagramElements): Promise<void>
+    setElements(elements: AnagramElements, abortSignal: AbortSignal): Promise<void>
     getListData(): Promise<VeryLongListData<AnagramListItem>>
 }
 
 export function createAnagramList(): AnagramList {
     const worker = new Worker('../worker/main.ts');
-    worker.postMessage('blah')
+    const requests = createWorkerRequests(worker);
     return {
-        setElements(elements) {
-            return Promise.resolve();
+        setElements(elements, abortSignal) {
+            return requests.send<void>({
+                type: 'setElements',
+                elements
+            }, abortSignal);
         },
         getListData() {
             return Promise.resolve({

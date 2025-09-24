@@ -8,5 +8,8 @@
         "rootDir": ".",
         "outDir": "../../dist-types/src/app"
     },
-    "include": ["**/*"]
+    "include": ["**/*"],
+    "references": [
+        {"path": "../shared"}
+    ]
 }
