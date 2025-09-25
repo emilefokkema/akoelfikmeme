@@ -15,7 +15,7 @@ function isWorkerResponse(data: unknown): data is WorkerResponse {
 }
 
 function isSuccess(response: WorkerResponse): response is SuccessWorkerResponse {
-    return (response as SuccessWorkerResponse).result !== undefined;
+    return 'result' in response
 }
 
 function isError(response: WorkerResponse): response is ErrorWorkerResponse {
