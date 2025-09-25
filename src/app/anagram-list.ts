@@ -8,7 +8,7 @@ export interface AnagramList {
 }
 
 export function createAnagramList(): AnagramList {
-    const worker = new Worker('../worker/main.ts');
+    const worker = new Worker('../worker/main.ts', {type: 'module'});
     worker.addEventListener('error', e => console.log(e))
     const requests = createWorkerRequests(worker);
     return {
