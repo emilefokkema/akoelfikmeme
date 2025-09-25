@@ -4,7 +4,7 @@
         <link rel="stylesheet" href="index.css"/>
     </head>
     <body>
-        <input type="text"/>
+        <anagram-input></anagram-input>
         <div class="list-container">
             <very-long-list></very-long-list>
         </div>
@@ -20,6 +20,10 @@
             <div id="content">
                 <slot></slot>
             </div>
+        </template>
+        <template id="anagram-input-template">
+            <link rel="stylesheet" href="anagram-input.css"/>
+            <input type="text"/>
         </template>
         <script type="module" src="app/main.ts"></script>
     </body>

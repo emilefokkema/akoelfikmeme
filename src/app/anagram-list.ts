@@ -1,11 +1,6 @@
+import type { AnagramElements, AnagramListItem, SetElements } from "../shared/anagram-list-messages";
 import type { VeryLongListData } from "./very-long-list-data"
 import { createWorkerRequests } from "./worker-requests"
-
-export type AnagramElements = string[]
-export interface AnagramListItem {
-    elements: AnagramElements
-    permutation: number[]
-}
 
 export interface AnagramList {
     setElements(elements: AnagramElements, abortSignal: AbortSignal): Promise<void>
@@ -14,13 +9,15 @@ export interface AnagramList {
 
 export function createAnagramList(): AnagramList {
     const worker = new Worker('../worker/main.ts');
+    worker.addEventListener('error', e => console.log(e))
     const requests = createWorkerRequests(worker);
     return {
         setElements(elements, abortSignal) {
-            return requests.send<void>({
+            const request: SetElements = {
                 type: 'setElements',
                 elements
-            }, abortSignal);
+            }
+            return requests.send<void>(request, abortSignal);
         },
         getListData() {
             return Promise.resolve({
