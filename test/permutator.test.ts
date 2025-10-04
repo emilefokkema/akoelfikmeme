@@ -111,19 +111,25 @@ describe('permutator', () => {
     ])('should create sequences', (list) => {
         let currentPermutation: Permutation | undefined;
         for(let i = 0; i < list.length; i++){
-            const permIndex = list[i];
+            const permutationValue = list[i];
             if(i === 0){
-                currentPermutation = new PermutationList(permIndex).getPermutation(permIndex);
-                expect(currentPermutation?.value).toEqual(permIndex);
+                currentPermutation = new PermutationList(permutationValue).getPermutation(permutationValue);
+                expect(currentPermutation?.value).toEqual(permutationValue);
             }else{
                 const nextPermutation = currentPermutation?.next();
                 expect(nextPermutation?.previous()?.value).toEqual(currentPermutation?.value)
                 currentPermutation = nextPermutation;
-                expect(currentPermutation?.value).toEqual(permIndex);
+                expect(currentPermutation?.value).toEqual(permutationValue);
             }
             if(i === list.length - 1){
                 expect(currentPermutation?.next()).toBeUndefined();
             }
         }
+    })
+
+    it.skip('should return the relative position of a permutation', () => {
+        const list = new PermutationList([0, 1, 1, 2, 2, 2]);
+        const perm1 = list.getPermutation([1, 2, 0, 1, 2, 2]);
+        expect(perm1?.getPosition()).toBeCloseTo(.3); // 19th of 60
     })
 })

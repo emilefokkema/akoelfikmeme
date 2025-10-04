@@ -6,6 +6,7 @@ export interface Permutation {
     readonly value: PermutationValue
     previous(): Permutation | undefined
     next(): Permutation | undefined
+    getPosition(): number
 }
 
 class UniqueValuePermutation {
@@ -153,7 +154,7 @@ class PermutationImpl implements Permutation {
     constructor(
         public readonly value: PermutationValue,
         private readonly permutation: UniqueValuePermutation,
-        private readonly valueMap: PermutableValue[]
+        private readonly valueMap: ValueMap
     ){}
 
     private findIndexOfDuplication(permutation: UniqueValuePermutation): number {
@@ -162,12 +163,7 @@ class PermutationImpl implements Permutation {
         let result = -1;
         for(let index = values.length - 1; index >= 0; index--){
             const permValueAtIndex = values[index];
-            const { duplicateIndices } = this.valueMap[permValueAtIndex];
-            if(!duplicateIndices){
-                valuesSeen.push(permValueAtIndex);
-                continue;
-            }
-            if(duplicateIndices.some(i => i < permValueAtIndex && valuesSeen.includes(i))){
+            if(this.valueMap.hasDuplicateIndexAt(permValueAtIndex, i => i < permValueAtIndex && valuesSeen.includes(i))){
                 result = index;
             }
             valuesSeen.push(permValueAtIndex)
@@ -235,14 +231,23 @@ class PermutationImpl implements Permutation {
         return PermutationImpl.fromUniquePermutation(uniquePermutationPrevious, this.valueMap);
     }
 
-    private static fromUniquePermutation(permutation: UniqueValuePermutation, valueMap: PermutableValue[]): PermutationImpl {
+    getPosition(): number {
+        const uniqueIndexValues = this.permutation.index;
+        const length = uniqueIndexValues.length;
+        for(let uniqueIndexValueIndex = 0; uniqueIndexValueIndex < length; uniqueIndexValueIndex++){
+
+        }
+        return 0;
+    }
+
+    private static fromUniquePermutation(permutation: UniqueValuePermutation, valueMap: ValueMap): PermutationImpl {
         const permValues = permutation.index;
         const length = permValues.length;
         
         const nextValues: number[] = new Array(length);
         for(let index = 0; index < length; index++){
             const permValueAtIndex = permValues[index];
-            nextValues[index] = valueMap[permValueAtIndex].value;
+            nextValues[index] = valueMap.valueAt(permValueAtIndex);
         }
 
         return new PermutationImpl(nextValues, permutation, valueMap);
@@ -253,10 +258,64 @@ interface PermutableValue {
     value: number
     duplicateIndices: number[] | undefined
 }
+
+class ValueMap {
+    get size(): number {
+        return this.permutableValues.length;
+    }
+    constructor(
+        private readonly permutableValues: PermutableValue[]
+    ){}
+
+    valueAt(index: number): number {
+        return this.permutableValues[index].value;
+    }
+    hasDuplicateIndexAt(index: number, predicate: (duplicate: number) => boolean): boolean {
+        const duplicateIndices = this.permutableValues[index].duplicateIndices;
+        if(!duplicateIndices){
+            return false;
+        }
+        return duplicateIndices.some(predicate);
+    }
+    *getIndicesByValue(value: number): Iterable<number> {
+        for(let index = 0; index < this.permutableValues.length; index++){
+            const {value: valueAtIndex} = this.permutableValues[index];
+            if(valueAtIndex !== value){
+                continue;
+            }
+            yield index;
+        }
+    }
+
+    static create(permutationValue: PermutationValue): ValueMap {
+        const permutableValues: PermutableValue[] = new Array(permutationValue.length);
+        const duplicateIndicesMap = new Map<number, number[]>();
+        for(let index = 0; index < permutationValue.length; index++){
+            const value = permutationValue[index];
+            const duplicateIndices: number[] = duplicateIndicesMap.get(value) || [];
+            duplicateIndices.push(index);
+            duplicateIndicesMap.set(value, duplicateIndices)
+            permutableValues[index] = {
+                value,
+                duplicateIndices
+            }
+        }
+        for(let index = 0; index < permutationValue.length; index++){
+            const {value, duplicateIndices} = permutableValues[index];
+            permutableValues[index] = {
+                value,
+                duplicateIndices: duplicateIndices && duplicateIndices.length > 1
+                    ? duplicateIndices.filter(v => v !== index)
+                    : undefined
+            }
+        }
+        return new ValueMap(permutableValues);
+    }
+}
 export class PermutationList {
-    private readonly valueMap: PermutableValue[]
+    private readonly valueMap: ValueMap
     constructor(value: PermutationValue){
-        this.valueMap = createValueMap(value);
+        this.valueMap = ValueMap.create(value)
     }
 
     getPermutation(values: PermutationValue): Permutation | undefined {
@@ -264,9 +323,8 @@ export class PermutationList {
         const indicesUsed = new Set<number>();
         first:for(let valueIndex = 0; valueIndex < values.length; valueIndex++){
             const value = values[valueIndex];
-            for(let index = 0; index < this.valueMap.length; index++){
-                const {value: valueAtIndex} = this.valueMap[index];
-                if(valueAtIndex !== value || indicesUsed.has(index)){
+            for(const index of this.valueMap.getIndicesByValue(value)){
+                if(indicesUsed.has(index)){
                     continue;
                 }
                 indices[valueIndex] = index;
@@ -275,11 +333,11 @@ export class PermutationList {
             }
             return undefined;
         }
-        const uniqueValuePermutation = UniqueValuePermutation.earliestStartingWith(this.valueMap.length, indices);
+        const uniqueValuePermutation = UniqueValuePermutation.earliestStartingWith(this.valueMap.size, indices);
         if(!uniqueValuePermutation){
             return undefined;
         }
-        const valuesToUse = uniqueValuePermutation.index.map(i => this.valueMap[i].value)
+        const valuesToUse = uniqueValuePermutation.index.map(i => this.valueMap.valueAt(i))
         return new PermutationImpl(valuesToUse, uniqueValuePermutation, this.valueMap)
     }
 }
