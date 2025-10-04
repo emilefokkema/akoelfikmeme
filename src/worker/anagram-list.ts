@@ -6,7 +6,7 @@ interface ElementsPermutation {
     elementMap: Map<number, string>
 }
 function createElementsPermutation(elements: AnagramElements): ElementsPermutation {
-    const availableIndices: number[] = Array.apply(null, new Array(elements.length)).map((_, index) => index);
+    let currentIndex = 0;
     const indicesMap = new Map<string, number>();
     const elementMap = new Map<number, string>();
     const permutationValue: number[] = [];
@@ -15,8 +15,7 @@ function createElementsPermutation(elements: AnagramElements): ElementsPermutati
         if(indicesMap.has(element)){
             index = indicesMap.get(element)!;
         }else{
-            const randomIndexIndex = Math.floor(Math.random() * availableIndices.length);
-            ([index] = availableIndices.splice(randomIndexIndex, 1));
+            index = currentIndex++;
             indicesMap.set(element, index);
             elementMap.set(index, element);
         }
