@@ -214,7 +214,10 @@ export class VeryLongList extends HTMLElement {
                 this.observer.observe(itemElement);
             }
         }
-        this.spliceItems(0, items.length)
+        const tooMany = this.items.length - 5 * this.numberOfItemsInHeight;
+        if(tooMany > 0){
+            this.spliceItems(0, tooMany)
+        }
         this.loading = false;
     }
 
