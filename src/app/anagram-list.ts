@@ -1,56 +1,46 @@
-import type { AnagramElements, AnagramListItem, SetElements } from "../shared/anagram-list-messages";
+import type { AnagramElements, AnagramListClient, AnagramListItem } from "../shared/anagram-list-messages";
+import { createRequestResponseClient } from "./request-response-client";
 import type { VeryLongListData } from "./very-long-list-data"
 import { createWorkerRequests } from "./worker-requests"
 
 export interface AnagramList {
     setElements(elements: AnagramElements, abortSignal: AbortSignal): Promise<void>
-    getListData(): Promise<VeryLongListData<AnagramListItem>>
+    getListData(abortSignal: AbortSignal): Promise<VeryLongListData<AnagramListItem> | undefined>
 }
 
 export function createAnagramList(): AnagramList {
     const worker = new Worker('../worker/main.ts', {type: 'module'});
     worker.addEventListener('error', e => console.log(e))
     const requests = createWorkerRequests(worker);
+    const client = createRequestResponseClient<AnagramListClient>(requests, {
+        setElements: true,
+        getItems: true,
+        getItemsAfterItem: true,
+        getItemsBeforeItem: true
+    });
     return {
         setElements(elements, abortSignal) {
-            const request: SetElements = {
-                type: 'setElements',
-                elements
-            }
-            return requests.send<void>(request, abortSignal);
+            return client.setElements(elements, abortSignal);
         },
-        getListData() {
-            return Promise.resolve({
-                items: {
-                    items: [
-                        {
-                            elements: ['a','n', 'a', 'g', 'r', 'a', 'm'],
-                            permutation: [0, 1, 2, 3, 4, 5, 6]
-                        }
-                    ],
-                    hasPrevious: false,
-                    hasNext: false
+        async getListData(abortSignal) {
+            const data = await client.getItems(undefined, abortSignal);
+            if(!data){
+                return undefined;
+            }
+            return {
+                items: data,
+                getItemsAfterItem(item, maxItems) {
+                    return client.getItemsAfterItem({item, maxItems}, abortSignal)
                 },
-                getItemsAfterItem(item, nrOfItems) {
-                    return Promise.resolve({
-                        items: [],
-                        hasPrevious: false,
-                        hasNext: false
-                    })
-                },
-                getItemsBeforeItem(item, nrOfItems) {
-                    return Promise.resolve({
-                        items: [],
-                        hasPrevious: false,
-                        hasNext: false
-                    })
+                getItemsBeforeItem(item, maxItems) {
+                    return client.getItemsBeforeItem({item, maxItems}, abortSignal)
                 },
                 renderItem(item) {
                     const span = document.createElement('span');
                     span.textContent = item.elements.join('');
                     return span;
                 },
-            })
+            };
         },
     }
 }

@@ -10,6 +10,7 @@
     },
     "include": ["**/*"],
     "references": [
-        {"path": "../shared"}
+        {"path": "../shared"},
+        {"path": "../permutator"}
     ]
 }

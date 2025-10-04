@@ -246,9 +246,12 @@ export class VeryLongList extends HTMLElement {
         }
     }
 
-    public async setData<TItem>(data: VeryLongListData<TItem>): Promise<void>{
+    public async setData<TItem>(data: VeryLongListData<TItem> | undefined): Promise<void>{
         this.spliceItems(0, this.items.length);
         this.data = data;
+        if(!data){
+            return;
+        }
         const { hasPrevious, hasNext, items } = data.items;
         if(items.length === 0 || !this.shadow || !this.observer){
             return;

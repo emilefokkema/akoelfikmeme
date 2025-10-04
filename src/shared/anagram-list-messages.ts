@@ -1,10 +1,21 @@
 export type AnagramElements = string[]
 export interface AnagramListItem {
     elements: AnagramElements
-    permutation: number[]
+    permutation: readonly number[]
+}
+export interface AnagramListItemData {
+    items: AnagramListItem[]
+    hasPrevious: boolean
+    hasNext: boolean
+}
+export interface ContinuationRequest {
+    item: AnagramListItem,
+    maxItems: number
 }
 
-export interface SetElements {
-    type: 'setElements'
-    elements: AnagramElements
+export interface AnagramListClient {
+    setElements(elements: AnagramElements): void
+    getItems(): AnagramListItemData | undefined
+    getItemsAfterItem(request: ContinuationRequest): AnagramListItemData
+    getItemsBeforeItem(request: ContinuationRequest): AnagramListItemData
 }
