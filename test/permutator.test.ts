@@ -127,10 +127,25 @@ describe('permutator', () => {
         }
     })
 
-    it('should return the relative position of a permutation', () => {
-        const list = new PermutationList([0, 1, 1, 2, 2, 2]);
-        expect(list.getPermutation([0, 1, 1, 2, 2, 2])?.getPosition()).toBeCloseTo(0);
-        expect(list.getPermutation([1, 2, 0, 1, 2, 2])?.getPosition()).toBeCloseTo(.3); // 19th of 60
-        //expect(list.getPermutation([2, 2, 2, 1, 1, 0])?.getPosition()).toBeCloseTo(59 / 60); // 59th of 60
+    it.each([
+        [[0, 1, 1, 2, 2, 2], [0, 1, 1, 2, 2, 2], 0],
+        [[0, 1, 1, 2, 2, 2], [1, 2, 0, 1, 2, 2], 18 / 60], // 19th of 60
+        [[0, 1, 1, 2, 2, 2], [1, 2, 0, 2, 1, 2], 19 / 60], // 19th of 60
+        [[0, 1, 1, 2, 2, 2], [2, 2, 2, 1, 1, 0], 59 / 60], // 19th of 60
+        [[0, 1, 2, 3, 0], [0, 1, 2, 3, 0], 0],
+        [[0, 1, 2, 3, 0], [0, 0, 3, 2, 1], 23 / 60], // 24th of 60
+        [[0, 1, 2, 3, 0], [1, 0, 2, 3, 0], 24 / 60], // 25th of 60
+        [[0, 1, 2, 1, 3], [0, 1, 2, 1, 3], 0],
+        [[0, 1, 2, 1, 3], [0, 2, 1, 3, 1], 7 / 60], // 8th of 60
+        [[0, 1, 2, 1, 3], [3, 0, 2, 1, 1], 50 / 60], // 51st of 60
+        [[0, 1, 2, 1, 3], [1, 3, 0, 2, 1], 30 / 60], // 31st of 60
+        [[0], [0], 0],
+        [[0, 1], [0, 1], 0],
+        [[0, 1], [1, 0], 1 / 2],
+        [[4, 1, 4, 3, 4, 5, 9, 2], [4, 1, 4, 3, 4, 5, 2, 9], 0]
+    ])('should report the position of permutation within the list', (first, permutation, expectedPosition) => {
+        const list = new PermutationList(first);
+        const perm = list.getPermutation(permutation);
+        expect(perm?.getPosition()).toBeCloseTo(expectedPosition)
     })
 })

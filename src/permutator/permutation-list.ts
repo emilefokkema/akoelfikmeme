@@ -307,8 +307,20 @@ class ValueMap {
     }
     getPositionOfIndex(index: number): number {
         let result = 0;
+        const indicesSeen = new Set<number>();
         for(let i = 0; i < index; i++){
+            if(indicesSeen.has(i)){
+                continue;
+            }
             result += this.getSizeOfIndex(i);
+            indicesSeen.add(i);
+            const duplicates = this.permutableValues[i].duplicateIndices;
+            if(!duplicates){
+                continue;
+            }
+            for(const duplicate of duplicates){
+                indicesSeen.add(duplicate);
+            }
         }
         return result;
     }
