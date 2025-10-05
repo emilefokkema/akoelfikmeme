@@ -127,9 +127,10 @@ describe('permutator', () => {
         }
     })
 
-    it.skip('should return the relative position of a permutation', () => {
+    it('should return the relative position of a permutation', () => {
         const list = new PermutationList([0, 1, 1, 2, 2, 2]);
-        const perm1 = list.getPermutation([1, 2, 0, 1, 2, 2]);
-        expect(perm1?.getPosition()).toBeCloseTo(.3); // 19th of 60
+        expect(list.getPermutation([0, 1, 1, 2, 2, 2])?.getPosition()).toBeCloseTo(0);
+        expect(list.getPermutation([1, 2, 0, 1, 2, 2])?.getPosition()).toBeCloseTo(.3); // 19th of 60
+        //expect(list.getPermutation([2, 2, 2, 1, 1, 0])?.getPosition()).toBeCloseTo(59 / 60); // 59th of 60
     })
 })

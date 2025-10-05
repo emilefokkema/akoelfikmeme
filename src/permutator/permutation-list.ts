@@ -233,11 +233,27 @@ class PermutationImpl implements Permutation {
 
     getPosition(): number {
         const uniqueIndexValues = this.permutation.index;
-        const length = uniqueIndexValues.length;
-        for(let uniqueIndexValueIndex = 0; uniqueIndexValueIndex < length; uniqueIndexValueIndex++){
-
+        let result = 0;
+        let currentSectionSize = 1;
+        let valueMap = this.valueMap;
+        let indicesInValueMap: (number | undefined)[] = Array.apply(null, new Array(valueMap.size)).map((_, i) => i);
+        for(let uniqueIndexValueIndex = 0; uniqueIndexValueIndex < uniqueIndexValues.length; uniqueIndexValueIndex++){
+            const uniqueIndexValue = uniqueIndexValues[uniqueIndexValueIndex];
+            const indexInValueMap = indicesInValueMap[uniqueIndexValue];
+            if(indexInValueMap === undefined){
+                continue;
+            }
+            const positionOfIndex = valueMap.getPositionOfIndex(indexInValueMap);
+            result += currentSectionSize * positionOfIndex;
+            currentSectionSize *= valueMap.getSizeOfIndex(indexInValueMap);
+            const newValueMap = valueMap.withoutIndex(indexInValueMap);
+            if(!newValueMap){
+                break;
+            }
+            valueMap = newValueMap;
+            indicesInValueMap = indicesInValueMap.map(i => i === undefined || i === indexInValueMap ? undefined : i > indexInValueMap ? i - 1 : i);
         }
-        return 0;
+        return result;
     }
 
     private static fromUniquePermutation(permutation: UniqueValuePermutation, valueMap: ValueMap): PermutationImpl {
@@ -260,12 +276,13 @@ interface PermutableValue {
 }
 
 class ValueMap {
-    get size(): number {
-        return this.permutableValues.length;
-    }
+    public readonly size: number
+
     constructor(
         private readonly permutableValues: PermutableValue[]
-    ){}
+    ){
+        this.size = permutableValues.length;
+    }
 
     valueAt(index: number): number {
         return this.permutableValues[index].value;
@@ -277,6 +294,24 @@ class ValueMap {
         }
         return duplicateIndices.some(predicate);
     }
+    getSizeOfIndex(index: number): number {
+        const values = this.permutableValues[index];
+        if(!values){
+            return 0;
+        }
+        const duplicates = values.duplicateIndices;
+        if(!duplicates){
+            return 1 / this.size;
+        }
+        return ( 1 + duplicates.length ) / this.size;
+    }
+    getPositionOfIndex(index: number): number {
+        let result = 0;
+        for(let i = 0; i < index; i++){
+            result += this.getSizeOfIndex(i);
+        }
+        return result;
+    }
     *getIndicesByValue(value: number): Iterable<number> {
         for(let index = 0; index < this.permutableValues.length; index++){
             const {value: valueAtIndex} = this.permutableValues[index];
@@ -285,6 +320,34 @@ class ValueMap {
             }
             yield index;
         }
+    }
+    withoutIndex(index: number): ValueMap | undefined {
+        if(index >= this.size){
+            return this;
+        }
+        if(this.size === 1){
+            return undefined;
+        }
+        const newSize = this.size - 1;
+        const permutableValues: PermutableValue[] = new Array(newSize);
+        for(let newIndex = 0; newIndex < newSize; newIndex++){
+            const indexInThis = newIndex < index ? newIndex : newIndex + 1;
+            const {value, duplicateIndices} = this.permutableValues[indexInThis];
+            const newDuplicateIndices = duplicateIndices 
+                ? duplicateIndices
+                    .filter(i => i !== index)
+                    .map(i => i < index ? i : i - 1)
+                : undefined
+            permutableValues[newIndex] = {
+                value,
+                duplicateIndices: newDuplicateIndices
+                    ? newDuplicateIndices.length > 0
+                        ? newDuplicateIndices
+                        : undefined
+                    : undefined
+            }
+        }
+        return new ValueMap(permutableValues)
     }
 
     static create(permutationValue: PermutationValue): ValueMap {
