@@ -9,4 +9,5 @@ export interface VeryLongListData<TItem = unknown> {
     getItemsAfterItem(item: TItem, nrOfItems: number): Promise<VeryLongListItems<TItem>>
     getItemsBeforeItem(item: TItem, nrOfItems: number): Promise<VeryLongListItems<TItem>>
     renderItem(item: TItem): Element
+    getRelativePositionOfItem(item: TItem): Promise<number>
 }

@@ -1,4 +1,5 @@
 import type { VeryLongListData, VeryLongListItems } from "./very-long-list-data";
+import './very-long-list-scrollbar'
 
 function whenElementScrolled(element: Element, signal: AbortSignal): Promise<void> {
     return new Promise<void>((res, rej) => {
@@ -168,7 +169,7 @@ export class VeryLongList extends HTMLElement {
             return;
         }
         this.loading = true;
-        const containerElement = this.shadow.getElementById('container')!;
+        const containerElement = this.shadow.getElementById('content-container')!;
         const listItems = await this.data.getItemsBeforeItem(firstItem.data.item, this.numberOfItemsInHeight);
         const scrollTop = containerElement.scrollTop;
         const items = listItems.items;
@@ -221,6 +222,20 @@ export class VeryLongList extends HTMLElement {
         this.loading = false;
     }
 
+    private async setScrollbar(): Promise<void> {
+        if(!this.shadow || this.numberOfItemsInHeight === undefined || !this.data){
+            return;
+        }
+        const scrollbar = this.shadow.querySelector('very-long-list-scrollbar')!;
+        const scrollbarVisible = this.items.length >= this.numberOfItemsInHeight;
+        scrollbar.visible = scrollbarVisible;
+        if(scrollbarVisible){
+            const relativePosition1 = await this.data.getRelativePositionOfItem(this.items[0].data.item);
+            const relativePosition2 = await this.data.getRelativePositionOfItem(this.items[this.numberOfItemsInHeight - 1].data.item);
+            console.log(`position ${relativePosition1} --> ${relativePosition2}`)
+        }
+    }
+
     protected connectedCallback(){
         const templateEl = document.getElementById('very-long-list-template') as HTMLTemplateElement;
         const content = templateEl.content.cloneNode(true);
@@ -228,7 +243,7 @@ export class VeryLongList extends HTMLElement {
         shadow.appendChild(content);
         this.shadow = shadow;
         
-        const containerElement = shadow.getElementById('container')!;
+        const containerElement = shadow.getElementById('content-container')!;
         this.observer = new IntersectionObserver((entries) => this.handleObservedIntersections(entries), {
             root: containerElement
         })
@@ -289,8 +304,9 @@ export class VeryLongList extends HTMLElement {
                 contentElement.appendChild(item.element);
             }
         }
+        await this.setScrollbar();
         nrOfItemsBefore = Math.min(Math.max(0, this.items.length - numberOfItemsInHeight), nrOfItemsBefore);
-        const containerElement = this.shadow.getElementById('container')!;
+        const containerElement = this.shadow.getElementById('content-container')!;
         const scrollTop = this.itemHeight * nrOfItemsBefore;
         await scrollElement(containerElement, scrollTop);
         for(let index = 0; index < this.items.length; index += this.numberOfItemsInHeight){

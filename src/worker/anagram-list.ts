@@ -137,4 +137,14 @@ export class AnagramList implements AnagramListClient {
             hasNext: !!next
         }
     }
+    public getRelativePositionOfItem(item: AnagramListItem): number {
+        if(!this.permutationList){
+            return 0;
+        }
+        const permutation = this.permutationList.getPermutation(item.permutation);
+        if(!permutation){
+            return 0;
+        }
+        return permutation.getPosition();
+    }
 }

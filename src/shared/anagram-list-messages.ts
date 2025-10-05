@@ -18,4 +18,5 @@ export interface AnagramListClient {
     getItems(): AnagramListItemData | undefined
     getItemsAfterItem(request: ContinuationRequest): AnagramListItemData
     getItemsBeforeItem(request: ContinuationRequest): AnagramListItemData
+    getRelativePositionOfItem(item: AnagramListItem): number
 }
