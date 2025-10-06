@@ -8,3 +8,8 @@
 #container.visible {
     display: block;
 }
+#thumb {
+    position: absolute;
+    background-color: #0f0;
+    width: 100%;
+}

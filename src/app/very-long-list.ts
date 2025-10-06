@@ -232,7 +232,7 @@ export class VeryLongList extends HTMLElement {
         if(scrollbarVisible){
             const relativePosition1 = await this.data.getRelativePositionOfItem(this.items[0].data.item);
             const relativePosition2 = await this.data.getRelativePositionOfItem(this.items[this.numberOfItemsInHeight - 1].data.item);
-            console.log(`position ${relativePosition1} --> ${relativePosition2}`)
+            scrollbar.ratio = relativePosition2 - relativePosition1;
         }
     }
 

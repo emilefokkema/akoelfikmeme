@@ -1,7 +1,22 @@
 export class VeryLongListScrollbar extends HTMLElement {
     private shadow: ShadowRoot | undefined;
     private isVisible = false
+    private _ratio = 1;
 
+    public get ratio(): number {
+        return this._ratio;
+    }
+    public set ratio(value: number){
+        this._ratio = value;
+        if(!this.shadow){
+            return;
+        }
+        const container = this.shadow.getElementById('container')!;
+        const thumb = this.shadow.getElementById('thumb')!;
+        const {height} = container.getBoundingClientRect();
+        const thumbHeight = height * value;
+        thumb.style.height = `${thumbHeight}px`;
+    }
     public get visible(): boolean {
         return this.isVisible;
     }
