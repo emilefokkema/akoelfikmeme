@@ -1,5 +1,6 @@
 import type { VeryLongListData, VeryLongListItems } from "./very-long-list-data";
 import './very-long-list-scrollbar'
+import type { VeryLongListScrollbar } from "./very-long-list-scrollbar";
 
 function whenElementScrolled(element: Element, signal: AbortSignal): Promise<void> {
     return new Promise<void>((res, rej) => {
@@ -122,11 +123,17 @@ export class VeryLongList extends HTMLElement {
     private itemHeight: number = 20;
     private shadow: ShadowRoot | undefined;
     private numberOfItemsInHeight: number | undefined;
+    private height: number | undefined;
+    private scrollbarThumbRatio: number | undefined;
     private observer: IntersectionObserver | undefined;
     private data: VeryLongListData | undefined;
     private items: ItemDataWithElement[] = [];
     private loading = false;
+    private firstItemRelativePosition: number | undefined;
     private queuedAddItemsAbove = queued(() => this.addItemsAbove());
+    private scrollbar: VeryLongListScrollbar | undefined;
+    private containerElement: HTMLElement | undefined;
+    private contentElement: HTMLElement | undefined;
 
     private handleObservedIntersections(entries: IntersectionObserverEntry[]): void {
         if(this.numberOfItemsInHeight === undefined){
@@ -160,7 +167,12 @@ export class VeryLongList extends HTMLElement {
     }
 
     private async addItemsAbove(): Promise<void> {
-        if(this.loading || !this.data || !this.shadow || !this.observer || this.numberOfItemsInHeight === undefined){
+        if(this.loading
+            || !this.data
+            || !this.observer
+            || this.numberOfItemsInHeight === undefined
+            || this.containerElement === undefined
+        ){
             return;
         }
         
@@ -169,9 +181,8 @@ export class VeryLongList extends HTMLElement {
             return;
         }
         this.loading = true;
-        const containerElement = this.shadow.getElementById('content-container')!;
         const listItems = await this.data.getItemsBeforeItem(firstItem.data.item, this.numberOfItemsInHeight);
-        const scrollTop = containerElement.scrollTop;
+        const scrollTop = this.containerElement.scrollTop;
         const items = listItems.items;
         if(items.length === 0){
             return;
@@ -180,18 +191,24 @@ export class VeryLongList extends HTMLElement {
         this.prependItems(newItems, firstItem.element);
         this.spliceItems(this.items.length - items.length, items.length);
         const desiredScrollTop = scrollTop + newItems.length * this.itemHeight;
-        await scrollElement(containerElement, desiredScrollTop);
+        await scrollElement(this.containerElement, desiredScrollTop);
         for(let index = newItems.length - 1; index >= 0; index--){
             const itemElement = newItems[index].element;
             if(index === 0){
                 this.observer.observe(itemElement);
             }
         }
+        await this.getFirstItemRelativePosition();
         this.loading = false;
     }
 
     private async addItemsBelow(): Promise<void> {
-        if(this.loading || !this.data || !this.shadow || !this.observer || this.numberOfItemsInHeight === undefined){
+        if(this.loading
+            || !this.data
+            || !this.observer
+            || this.numberOfItemsInHeight === undefined
+            || !this.contentElement
+        ){
             return;
         }
         const lastItem = this.items[this.items.length - 1];
@@ -204,12 +221,11 @@ export class VeryLongList extends HTMLElement {
         if(items.length === 0){
             return;
         }
-        const contentElement = this.shadow.getElementById('content')!;
         const newItems = [...createItemsWithElements(this.data, listItems)]
         for(let index = 0; index < newItems.length; index++){
             const newItem = newItems[index];
             const itemElement = newItem.element;
-            contentElement.appendChild(itemElement);
+            this.contentElement.appendChild(itemElement);
             this.items.push(newItem);
             if(index === 0){
                 this.observer.observe(itemElement);
@@ -219,21 +235,50 @@ export class VeryLongList extends HTMLElement {
         if(tooMany > 0){
             this.spliceItems(0, tooMany)
         }
+        await this.getFirstItemRelativePosition();
         this.loading = false;
     }
 
     private async setScrollbar(): Promise<void> {
-        if(!this.shadow || this.numberOfItemsInHeight === undefined || !this.data){
+        if(this.numberOfItemsInHeight === undefined
+            || !this.data
+            || !this.scrollbar
+        ){
             return;
         }
-        const scrollbar = this.shadow.querySelector('very-long-list-scrollbar')!;
         const scrollbarVisible = this.items.length >= this.numberOfItemsInHeight;
-        scrollbar.visible = scrollbarVisible;
-        if(scrollbarVisible){
-            const relativePosition1 = await this.data.getRelativePositionOfItem(this.items[0].data.item);
-            const relativePosition2 = await this.data.getRelativePositionOfItem(this.items[this.numberOfItemsInHeight - 1].data.item);
-            scrollbar.ratio = relativePosition2 - relativePosition1;
+        this.scrollbar.visible = scrollbarVisible;
+        if(!scrollbarVisible){
+            return;
         }
+        const relativePosition1 = await this.data.getRelativePositionOfItem(this.items[0].data.item);
+        this.firstItemRelativePosition = relativePosition1;
+        const relativePosition2 = await this.data.getRelativePositionOfItem(this.items[this.numberOfItemsInHeight - 1].data.item);
+        const thumbRatio = relativePosition2 - relativePosition1;
+        this.scrollbarThumbRatio = thumbRatio;
+        this.scrollbar.thumbRatio = thumbRatio;
+        this.scrollbar.scrolledRatio = 0;
+    }
+
+    private async getFirstItemRelativePosition(): Promise<void> {
+        if(!this.data){
+            return;
+        }
+        this.firstItemRelativePosition = await this.data.getRelativePositionOfItem(this.items[0].data.item);
+    }
+
+    private setScrolledRatio(): void {
+        if(this.firstItemRelativePosition === undefined
+            || this.height === undefined
+            || this.scrollbarThumbRatio === undefined
+            || !this.containerElement
+            || !this.scrollbar
+        ){
+            return;
+        }
+        const partOfHeightScrolled = this.containerElement.scrollTop / this.height;
+        const scrollbarScrolledRatio = this.firstItemRelativePosition + partOfHeightScrolled * this.scrollbarThumbRatio;
+        this.scrollbar.scrolledRatio = scrollbarScrolledRatio;
     }
 
     protected connectedCallback(){
@@ -244,21 +289,24 @@ export class VeryLongList extends HTMLElement {
         this.shadow = shadow;
         
         const containerElement = shadow.getElementById('content-container')!;
+        this.containerElement = containerElement;
         this.observer = new IntersectionObserver((entries) => this.handleObservedIntersections(entries), {
             root: containerElement
         })
+        containerElement.addEventListener('scroll', () => this.setScrolledRatio());
+        this.scrollbar = this.shadow.querySelector('very-long-list-scrollbar')!;
+        this.contentElement = this.shadow.getElementById('content')!;
     }
 
     private prependItems(items: ItemDataWithElement[], firstItemElement: Element): void {
-        if(!this.shadow){
+        if(!this.contentElement){
             return;
         }
         let elementToInsertBefore = firstItemElement;
-        const contentElement = this.shadow.getElementById('content')!;
         for(let index = items.length - 1; index >= 0; index--){
             const newItem = items[index];
             const itemElement = newItem.element;
-            contentElement.insertBefore(itemElement, elementToInsertBefore);
+            this.contentElement.insertBefore(itemElement, elementToInsertBefore);
             elementToInsertBefore = itemElement;
             this.items.unshift(newItem);
         }
@@ -268,20 +316,23 @@ export class VeryLongList extends HTMLElement {
         this.spliceItems(0, this.items.length);
         this.data = data;
         if(!data){
+            if(this.scrollbar){
+                this.scrollbar.visible = false;
+            }
             return;
         }
         const { hasPrevious, hasNext, items } = data.items;
-        if(items.length === 0 || !this.shadow || !this.observer){
+        if(items.length === 0 || !this.observer || !this.containerElement || !this.contentElement){
             return;
         }
         const {height} = await waitForAnimationFrameWhen(() => this.getBoundingClientRect(), ({height}) => height > 0, 20);
+        this.height = height;
         if(height === 0){
             return;
         }
-        const contentElement = this.shadow.getElementById('content')!;
         this.items.push(...createItemsWithElements(data, data.items));
         for(const item of this.items){
-            contentElement.appendChild(item.element);
+            this.contentElement.appendChild(item.element);
         }
         const firstItemElement = this.items[0].element;
         const {height: itemHeight} = await waitForAnimationFrameWhen(() => firstItemElement.getBoundingClientRect(), ({height}) => height > 0, 20);
@@ -301,14 +352,13 @@ export class VeryLongList extends HTMLElement {
             const itemsWithElementsAfter = [...createItemsWithElements(data, itemsAfter)];
             this.items.push(...itemsWithElementsAfter);
             for(const item of itemsWithElementsAfter){
-                contentElement.appendChild(item.element);
+                this.contentElement.appendChild(item.element);
             }
         }
         await this.setScrollbar();
         nrOfItemsBefore = Math.min(Math.max(0, this.items.length - numberOfItemsInHeight), nrOfItemsBefore);
-        const containerElement = this.shadow.getElementById('content-container')!;
         const scrollTop = this.itemHeight * nrOfItemsBefore;
-        await scrollElement(containerElement, scrollTop);
+        await scrollElement(this.containerElement, scrollTop);
         for(let index = 0; index < this.items.length; index += this.numberOfItemsInHeight){
             const item = this.items[index];
             this.observer.observe(item.element);

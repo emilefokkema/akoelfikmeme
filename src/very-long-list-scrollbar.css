@@ -3,6 +3,7 @@
     height: 100%;
     background-color: #f00;
     display: none;
+    position: relative;
 }
 
 #container.visible {
