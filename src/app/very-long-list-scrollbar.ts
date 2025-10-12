@@ -1,3 +1,13 @@
+export interface ScrollRequestedEvent extends CustomEvent {
+    detail: {
+        ratio: number
+    }
+}
+
+export interface VeryLongListScrollbarEventMap extends HTMLElementEventMap {
+    'scrollrequested': ScrollRequestedEvent
+}
+
 export class VeryLongListScrollbar extends HTMLElement {
     private shadow: ShadowRoot | undefined;
     private isVisible = false
@@ -110,6 +120,28 @@ export class VeryLongListScrollbar extends HTMLElement {
         this.shadow = shadow;
         this.thumb = shadow.getElementById('thumb')!;
         this.extaThumb = shadow.getElementById('extra-thumb')!;
+        const container = shadow.getElementById('container')!;
+        container.addEventListener('click', (e) => {
+            const { y: containerY, height } = container.getBoundingClientRect();
+            const containerOffsetY = e.pageY - containerY;
+            const clickedRatio = containerOffsetY / height;
+            if(clickedRatio > this._scrolledRatio && clickedRatio < this._scrolledRatio + this.thumbRatio){
+                return;
+            }
+            const ratio = Math.min(1 - this.thumbRatio, clickedRatio);
+            const customEvent = new CustomEvent('scrollrequested', { 
+                detail: { ratio },
+                composed: true,
+                bubbles: true
+            });
+            this.dispatchEvent(customEvent);
+        }, {capture: true})
+    }
+    addEventListener<K extends keyof VeryLongListScrollbarEventMap>(type: K, listener: (this: HTMLElement, ev: VeryLongListScrollbarEventMap[K]) => any, options?: boolean | AddEventListenerOptions): void{
+        super.addEventListener(type, listener as (ev: Event) => void, options);
+    }
+    removeEventListener<K extends keyof VeryLongListScrollbarEventMap>(type: K, listener: (this: HTMLElement, ev: VeryLongListScrollbarEventMap[K]) => any, options?: boolean | AddEventListenerOptions): void{
+        super.removeEventListener(type, listener as (ev: Event) => void, options);
     }
 }
 

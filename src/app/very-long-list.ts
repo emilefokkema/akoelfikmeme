@@ -295,6 +295,9 @@ export class VeryLongList extends HTMLElement {
         })
         containerElement.addEventListener('scroll', () => this.setScrolledRatio());
         this.scrollbar = this.shadow.querySelector('very-long-list-scrollbar')!;
+        this.scrollbar.addEventListener('scrollrequested', ({detail: { ratio }}) => {
+            console.log(`got request to scroll to ratio ${ratio}`);
+        })
         this.contentElement = this.shadow.getElementById('content')!;
     }
 
