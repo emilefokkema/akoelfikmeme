@@ -16,7 +16,8 @@ export function createAnagramList(): AnagramList {
         setElements: true,
         getItems: true,
         getItemsAfterItem: true,
-        getItemsBeforeItem: true
+        getItemsBeforeItem: true,
+        getRelativePositionOfItem: true
     });
     return {
         setElements(elements, abortSignal) {
@@ -39,6 +40,9 @@ export function createAnagramList(): AnagramList {
                     const span = document.createElement('span');
                     span.textContent = item.elements.join('');
                     return span;
+                },
+                getRelativePositionOfItem(item) {
+                    return client.getRelativePositionOfItem(item, abortSignal)
                 },
             };
         },

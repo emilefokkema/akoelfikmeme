@@ -1,7 +1,15 @@
-#container {
+.container {
+    display: flex;
+    flex-direction: row;
+    height: 100%;
+}
+
+#content-container {
     height: 100%;
     overflow-y: auto;
     overflow-x: hidden;
+    scrollbar-width: none;
+    flex-grow: 1;
 }
 
 very-long-list-item {

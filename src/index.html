@@ -11,8 +11,13 @@
 
         <template id="very-long-list-template">
             <link rel="stylesheet" href="very-long-list.css"/>
-            <div id="container">
-                <div id="content"></div>
+            <div class="container">
+                <div id="content-container">
+                    <div id="content"></div> 
+                </div>
+                <div>
+                    <very-long-list-scrollbar></very-long-list-scrollbar>
+                </div>
             </div>
         </template>
         <template id="very-long-list-item-template">
@@ -24,6 +29,17 @@
         <template id="anagram-input-template">
             <link rel="stylesheet" href="anagram-input.css"/>
             <input type="text"/>
+        </template>
+        <template id="very-long-list-scrollbar-template">
+            <link rel="stylesheet" href="very-long-list-scrollbar.css"/>
+            <div id="container">
+                <div class="extra-track">
+                    <div id="extra-thumb"></div>
+                </div>
+                <div class="track">
+                    <div id="thumb"></div>
+                </div>
+            </div>
         </template>
         <script type="module" src="app/main.ts"></script>
     </body>

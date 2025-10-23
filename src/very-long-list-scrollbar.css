@@ -1,0 +1,40 @@
+#container {
+    display: none;
+    height: 100%;
+}
+
+.track {
+    width: 10px;
+    background-color: #f00;
+    position: relative;
+    height: 100%;
+}
+
+.extra-track {
+    width: 5px;
+    position: relative;
+    height: 100%;
+    display: none
+}
+
+#container.extra-track-visible .extra-track{
+    display: block;
+}
+
+#container.visible {
+    display: flex;
+    flex-direction: row;
+}
+#thumb {
+    position: absolute;
+    background-color: #0f0;
+    width: 100%;
+}
+
+#extra-thumb {
+    position: absolute;
+    width: 5px;
+    height: 10px;
+    background-color: #00f;
+    clip-path: polygon(0 100%, 100% 50%, 0 0)
+}

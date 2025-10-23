@@ -111,19 +111,41 @@ describe('permutator', () => {
     ])('should create sequences', (list) => {
         let currentPermutation: Permutation | undefined;
         for(let i = 0; i < list.length; i++){
-            const permIndex = list[i];
+            const permutationValue = list[i];
             if(i === 0){
-                currentPermutation = new PermutationList(permIndex).getPermutation(permIndex);
-                expect(currentPermutation?.value).toEqual(permIndex);
+                currentPermutation = new PermutationList(permutationValue).getPermutation(permutationValue);
+                expect(currentPermutation?.value).toEqual(permutationValue);
             }else{
                 const nextPermutation = currentPermutation?.next();
                 expect(nextPermutation?.previous()?.value).toEqual(currentPermutation?.value)
                 currentPermutation = nextPermutation;
-                expect(currentPermutation?.value).toEqual(permIndex);
+                expect(currentPermutation?.value).toEqual(permutationValue);
             }
             if(i === list.length - 1){
                 expect(currentPermutation?.next()).toBeUndefined();
             }
         }
+    })
+
+    it.each([
+        [[0, 1, 1, 2, 2, 2], [0, 1, 1, 2, 2, 2], 0],
+        [[0, 1, 1, 2, 2, 2], [1, 2, 0, 1, 2, 2], 18 / 60], // 19th of 60
+        [[0, 1, 1, 2, 2, 2], [1, 2, 0, 2, 1, 2], 19 / 60], // 19th of 60
+        [[0, 1, 1, 2, 2, 2], [2, 2, 2, 1, 1, 0], 59 / 60], // 19th of 60
+        [[0, 1, 2, 3, 0], [0, 1, 2, 3, 0], 0],
+        [[0, 1, 2, 3, 0], [0, 0, 3, 2, 1], 23 / 60], // 24th of 60
+        [[0, 1, 2, 3, 0], [1, 0, 2, 3, 0], 24 / 60], // 25th of 60
+        [[0, 1, 2, 1, 3], [0, 1, 2, 1, 3], 0],
+        [[0, 1, 2, 1, 3], [0, 2, 1, 3, 1], 7 / 60], // 8th of 60
+        [[0, 1, 2, 1, 3], [3, 0, 2, 1, 1], 50 / 60], // 51st of 60
+        [[0, 1, 2, 1, 3], [1, 3, 0, 2, 1], 30 / 60], // 31st of 60
+        [[0], [0], 0],
+        [[0, 1], [0, 1], 0],
+        [[0, 1], [1, 0], 1 / 2],
+        [[4, 1, 4, 3, 4, 5, 9, 2], [4, 1, 4, 3, 4, 5, 2, 9], 0]
+    ])('should report the position of permutation within the list', (first, permutation, expectedPosition) => {
+        const list = new PermutationList(first);
+        const perm = list.getPermutation(permutation);
+        expect(perm?.getPosition()).toBeCloseTo(expectedPosition)
     })
 })
