@@ -1,6 +1,6 @@
 import type { VeryLongListData, VeryLongListItems } from "./very-long-list-data";
 import './very-long-list-scrollbar'
-import type { VeryLongListScrollbar } from "./very-long-list-scrollbar";
+import type { ScrollRequestedEvent, VeryLongListScrollbar } from "./very-long-list-scrollbar";
 
 function whenElementScrolled(element: Element, signal: AbortSignal): Promise<void> {
     return new Promise<void>((res, rej) => {
@@ -171,26 +171,46 @@ class DisplayedVeryLongListData<TItem = unknown> {
 }
 
 class ConnectedVeryLongList {
+    private readonly scrollListener: () => void
+    private readonly observer: IntersectionObserver
+    private readonly scrollRequestedListener: (ev: ScrollRequestedEvent) => void
     constructor(
         public readonly containerElement: HTMLElement,
-        public readonly observer: IntersectionObserver,
         public readonly contentElement: HTMLElement,
         public readonly scrollbar: VeryLongListScrollbar
     ){
+        const scrollListener = () => this.handleScroll();
+        containerElement.addEventListener('scroll', scrollListener);
+        this.scrollListener = scrollListener;
+        this.observer = new IntersectionObserver(
+            (entries) => this.handleObservedIntersections(entries),
+            { root: containerElement }
+        );
+        const scrollRequestedListener = (e: ScrollRequestedEvent) => this.handleScrollRequested(e);
+        scrollbar.addEventListener('scrollrequested', scrollRequestedListener);
+        this.scrollRequestedListener = scrollRequestedListener;
+    }
+
+    private handleScroll(): void {
+
+    }
+
+    private handleScrollRequested({ detail: { ratio }}: ScrollRequestedEvent): void {
+
+    }
+
+    private handleObservedIntersections(entries: IntersectionObserverEntry[]): void {
 
     }
 
     static create(
-        shadow: ShadowRoot,
-        observerCallback: IntersectionObserverCallback
+        shadow: ShadowRoot
     ): ConnectedVeryLongList {
         const containerElement = shadow.getElementById('content-container')!;
-        const observer = new IntersectionObserver(observerCallback, { root: containerElement });
         const scrollbar = shadow.querySelector('very-long-list-scrollbar')!;
         const contentElement = shadow.getElementById('content')!;
         return new ConnectedVeryLongList(
             containerElement,
-            observer,
             contentElement,
             scrollbar
         )
@@ -199,132 +219,6 @@ class ConnectedVeryLongList {
 
 export class VeryLongList extends HTMLElement {
     private connectedList: ConnectedVeryLongList | undefined;
-    private displayedData: DisplayedVeryLongListData | undefined;
-    private items: ItemDataWithElement[] = [];
-    private loading = false;
-    private queuedAddItemsAbove = queued(() => this.addItemsAbove());
-
-    private handleObservedIntersections(entries: IntersectionObserverEntry[]): void {
-        if(!this.displayedData){
-            return;
-        }
-        for(const {isIntersecting, target} of entries){
-            const itemIndex = this.items.findIndex(r => r.element === target);
-            if(itemIndex === -1 || !isIntersecting){
-                continue;
-            }
-            if(itemIndex >= this.items.length - this.displayedData.numberOfItemsInHeight){
-                this.addItemsBelow();
-                return;
-            }
-            if(itemIndex <= this.displayedData.numberOfItemsInHeight){
-                this.queuedAddItemsAbove();
-                return;
-            }
-        }
-    }
-
-    private spliceItems(startIndex: number, deleteCount: number): void {
-        if(!this.connectedList){
-            return;
-        }
-        const itemsToRemove = this.items.splice(startIndex, deleteCount);
-        for(const itemToRemove of itemsToRemove){
-            itemToRemove.element.remove();
-            this.connectedList.observer.unobserve(itemToRemove.element);
-        }
-    }
-
-    private async addItemsAbove(): Promise<void> {
-        if(this.loading || !this.displayedData || !this.connectedList
-        ){
-            return;
-        }
-        
-        const firstItem = this.items[0];
-        if(!firstItem || !firstItem.data.hasPrevious){
-            return;
-        }
-        this.loading = true;
-        const listItems = await this.displayedData.data.getItemsBeforeItem(firstItem.data.item, this.displayedData.numberOfItemsInHeight);
-        const scrollTop = this.connectedList.containerElement.scrollTop;
-        const items = listItems.items;
-        if(items.length === 0){
-            return;
-        }
-        const newItems = [...createItemsWithElements(this.displayedData.data, listItems)];
-        this.prependItems(newItems, firstItem.element);
-        this.spliceItems(this.items.length - items.length, items.length);
-        const desiredScrollTop = scrollTop + newItems.length * this.displayedData.itemHeight;
-        await scrollElement(this.connectedList.containerElement, desiredScrollTop);
-        for(let index = newItems.length - 1; index >= 0; index--){
-            const itemElement = newItems[index].element;
-            if(index === 0){
-                this.connectedList.observer.observe(itemElement);
-            }
-        }
-        await this.displayedData.setPosition(this.items);
-        this.loading = false;
-    }
-
-    private async addItemsBelow(): Promise<void> {
-        if(this.loading
-            || !this.displayedData
-            || !this.connectedList
-        ){
-            return;
-        }
-        const lastItem = this.items[this.items.length - 1];
-        if(!lastItem || !lastItem.data.hasNext){
-            return;
-        }
-        this.loading = true;
-        const listItems = await this.displayedData.data.getItemsAfterItem(lastItem.data.item, this.displayedData.numberOfItemsInHeight);
-        const items = listItems.items;
-        if(items.length === 0){
-            return;
-        }
-        const newItems = [...createItemsWithElements(this.displayedData.data, listItems)]
-        for(let index = 0; index < newItems.length; index++){
-            const newItem = newItems[index];
-            const itemElement = newItem.element;
-            this.connectedList.contentElement.appendChild(itemElement);
-            this.items.push(newItem);
-            if(index === 0){
-                this.connectedList.observer.observe(itemElement);
-            }
-        }
-        const tooMany = this.items.length - 5 * this.displayedData.numberOfItemsInHeight;
-        if(tooMany > 0){
-            this.spliceItems(0, tooMany)
-        }
-        await this.displayedData.setPosition(this.items);
-        this.loading = false;
-    }
-
-    private setScrolledRatio(): void {
-        if(!this.displayedData || !this.connectedList){
-            return;
-        }
-        this.connectedList.scrollbar.scrolledRatio = this.displayedData.getScrolledRatio(this.connectedList.containerElement.scrollTop);
-    }
-
-    private handleScrollRequest(ratio: number): void {
-        if(!this.displayedData || !this.connectedList){
-            return;
-        }
-        if(ratio < this.displayedData.firstItemRelativePosition){
-            console.log('need to add items above');
-            return;
-        }
-        const partOfHeightScrolled = this.connectedList.containerElement.scrollTop / this.displayedData.height;
-        const positionOfScreenTop = this.displayedData.firstItemRelativePosition + partOfHeightScrolled * this.displayedData.scrollbarThumbRatio;
-        if(ratio < positionOfScreenTop) {
-            console.log('need to scroll up');
-            return;
-        }
-
-    }
 
     protected connectedCallback(){
         const templateEl = document.getElementById('very-long-list-template') as HTMLTemplateElement;
@@ -333,89 +227,18 @@ export class VeryLongList extends HTMLElement {
         shadow.appendChild(content);
         
         const connectedList = ConnectedVeryLongList.create(
-            shadow,
-            (entries) => this.handleObservedIntersections(entries)
+            shadow
         );
-        connectedList.containerElement.addEventListener('scroll', () => this.setScrolledRatio());
-        connectedList.scrollbar.addEventListener('scrollrequested', ({detail: { ratio }}) => {
-            console.log(`got request to scroll to ratio ${ratio}`);
-        });
+        
+        // connectedList.scrollbar.addEventListener('scrollrequested', ({detail: { ratio }}) => {
+        //     console.log(`got request to scroll to ratio ${ratio}`);
+        // });
         this.connectedList = connectedList;
     }
 
-    private prependItems(items: ItemDataWithElement[], firstItemElement: Element): void {
-        if(!this.connectedList){
-            return;
-        }
-        let elementToInsertBefore = firstItemElement;
-        for(let index = items.length - 1; index >= 0; index--){
-            const newItem = items[index];
-            const itemElement = newItem.element;
-            this.connectedList.contentElement.insertBefore(itemElement, elementToInsertBefore);
-            elementToInsertBefore = itemElement;
-            this.items.unshift(newItem);
-        }
-    }
+    public async setData(data: VeryLongListData | undefined): Promise<void>{
 
-    public async setData<TItem>(data: VeryLongListData<TItem> | undefined): Promise<void>{
-        this.spliceItems(0, this.items.length);
-        if(!data){
-            if(this.connectedList){
-                this.connectedList.scrollbar.visible = false;
-            }
-            return;
-        }
-        const { hasPrevious, hasNext, items } = data.items;
-        if(items.length === 0 || !this.connectedList){
-            return;
-        }
-        const {height} = await waitForAnimationFrameWhen(() => this.getBoundingClientRect(), ({height}) => height > 0, 20);
-        if(height === 0){
-            return;
-        }
-        this.items.push(...createItemsWithElements(data, data.items));
-        for(const item of this.items){
-            this.connectedList.contentElement.appendChild(item.element);
-        }
-        const firstItemElement = this.items[0].element;
-        const {height: itemHeight} = await waitForAnimationFrameWhen(() => firstItemElement.getBoundingClientRect(), ({height}) => height > 0, 20);
-        const numberOfItemsInHeight = Math.ceil(height / itemHeight);
-        this.displayedData = new DisplayedVeryLongListData(
-            data,
-            itemHeight,
-            height,
-            numberOfItemsInHeight,
-            0,
-            0
-        )
-        let nrOfItemsBefore = 0;
-        if(hasPrevious){
-            const itemsBefore = await data.getItemsBeforeItem(items[0], 2 * numberOfItemsInHeight);
-            const itemsWithElementsBefore = [...createItemsWithElements(data, itemsBefore)];
-            this.prependItems(itemsWithElementsBefore, firstItemElement);
-            nrOfItemsBefore = itemsBefore.items.length;
-        }
-        const tooFew = 3 * numberOfItemsInHeight - items.length;
-        if(tooFew > 0 && hasNext){
-            const itemsAfter = await data.getItemsAfterItem(items[items.length - 1], tooFew);
-            const itemsWithElementsAfter = [...createItemsWithElements(data, itemsAfter)];
-            this.items.push(...itemsWithElementsAfter);
-            for(const item of itemsWithElementsAfter){
-                this.connectedList.contentElement.appendChild(item.element);
-            }
-        }
-        const scrollbarVisible = this.items.length >= numberOfItemsInHeight;
-        this.connectedList.scrollbar.visible = scrollbarVisible;
-        await this.displayedData.setPosition(this.items);
-        this.connectedList.scrollbar.thumbRatio = this.displayedData.scrollbarThumbRatio;
-        this.connectedList.scrollbar.scrolledRatio = 0;
-        nrOfItemsBefore = Math.min(Math.max(0, this.items.length - numberOfItemsInHeight), nrOfItemsBefore);
-        const scrollTop = itemHeight * nrOfItemsBefore;
-        await scrollElement(this.connectedList.containerElement, scrollTop);
-        for(let index = 0; index < this.items.length; index += numberOfItemsInHeight){
-            const item = this.items[index];
-            this.connectedList.observer.observe(item.element);
-        }
+        
     }
 }
 

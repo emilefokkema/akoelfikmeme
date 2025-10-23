@@ -9,7 +9,7 @@ async function initialize(): Promise<void> {
     const veryLongList = document.querySelector('very-long-list')!;
 
     input.addEventListener('input', throttledWithAbort(async (abortSignal) => {
-        const result = await anagramList.setElements(input.value, abortSignal);
+        await anagramList.setElements(input.value, abortSignal);
         if(abortSignal.aborted){
             return;
         }
