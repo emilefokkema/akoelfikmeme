@@ -17,7 +17,7 @@ async function initialize(): Promise<void> {
         if(abortSignal.aborted){
             return;
         }
-        veryLongList.setData(anagramListData);
+        veryLongList.setData(anagramListData, abortSignal);
     }, 300));
 }
 

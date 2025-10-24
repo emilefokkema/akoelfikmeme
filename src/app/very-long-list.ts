@@ -1,3 +1,4 @@
+import { throttledWithAbort } from "./throttled-with-abort";
 import type { VeryLongListData, VeryLongListItems } from "./very-long-list-data";
 import './very-long-list-scrollbar'
 import type { ScrollRequestedEvent, VeryLongListScrollbar } from "./very-long-list-scrollbar";
@@ -13,9 +14,20 @@ function whenElementScrolled(element: Element, signal: AbortSignal): Promise<voi
     })
 }
 
-function waitForAnimationFrameWhen<T>(calculate: () => T, predicate: (v: T) => boolean, maxRetries: number): Promise<T> {
-    return new Promise<T>((res, rej) => {
+function waitForAnimationFrameWhen<T>(
+    calculate: () => T,
+    predicate: (v: T) => boolean,
+    maxRetries: number,
+    abortSignal?: AbortSignal
+): Promise<T> {
+    return new Promise<T>((res) => {
         let triesLeft = maxRetries;
+        let requestedAnimationFrame: number | undefined;
+        abortSignal?.addEventListener('abort', () => {
+            if(requestedAnimationFrame !== undefined){
+                cancelAnimationFrame(requestedAnimationFrame);
+            }
+        })
         check();
         function check(): void {
             const value = calculate();
@@ -24,11 +36,11 @@ function waitForAnimationFrameWhen<T>(calculate: () => T, predicate: (v: T) => b
                 return;
             }
             triesLeft--;
-            if(triesLeft === 0){
-                rej(new Error(`After ${maxRetries} tries, predicate did not become true`));
+            if(triesLeft === 0 || abortSignal?.aborted){
+                res(value);
                 return;
             }
-            requestAnimationFrame(check);
+            requestedAnimationFrame = requestAnimationFrame(check);
         }
     })
 }
@@ -63,7 +75,7 @@ class VeryLongListItem extends HTMLElement {
     }
 }
 
-function createItemElement(data: VeryLongListData, item: unknown): VeryLongListItem {
+function createItemElement<TItem>(data: VeryLongListData, item: TItem): VeryLongListItem {
     const itemElement = document.createElement('very-long-list-item');
     itemElement.appendChild(data.renderItem(item));
     return itemElement;
@@ -74,6 +86,7 @@ interface ItemData<TItem> {
     hasNext: boolean
     hasPrevious: boolean
 }
+
 
 interface ItemDataWithElement<TItem = unknown> {
     data: ItemData<TItem>
@@ -102,27 +115,100 @@ function queued(fn: () => Promise<void>): () => void {
     }
 }
 
-function *createItemsWithElements(
-    data: VeryLongListData,
-    {items, hasPrevious, hasNext}: VeryLongListItems
-): Iterable<ItemDataWithElement>{
-    for(let index = 0; index < items.length; index++){
-        const item = items[index];
-        yield {
-            data: {
-                item,
-                hasPrevious: index > 0 || hasPrevious,
-                hasNext: index < items.length - 1 || hasNext
-            },
-            element: createItemElement(data, item)
+class DisplayedVeryLongListData<TItem = unknown> {
+    private displayHeight = 0;
+    private scrollTop = 0;
+    private itemHeight = 0;
+    private displayedItems: ItemDataWithElement<TItem>[] = [];
+    private lastInitialDisplayedIndex = -1;
+    private initialItemsLength: number
+    private constructor(
+        private readonly data: VeryLongListData<TItem>,
+        private readonly contentElement: HTMLElement,
+    ){
+        this.initialItemsLength = data.items.items.length;
+    }
+    destroy(): void {
+
+    }
+    setHeight(height: number, abortSignal?: AbortSignal): void {
+        this.displayHeight = height;
+        this.display(abortSignal);
+    }
+    private async display(abortSignal?: AbortSignal): Promise<void> {
+        if(this.displayHeight <= 0 || this.initialItemsLength === 0){
+            return;
         }
+        if(this.itemHeight === 0){
+            let firstItem = this.displayedItems[0];
+            if(!firstItem){
+                this.displayFirstItem();
+                firstItem = this.displayedItems[0];
+            }
+            const rect = await waitForAnimationFrameWhen(() => firstItem.element.getBoundingClientRect(), ({height}) => height > 0, 20, abortSignal);
+            if(rect.height === 0){
+                return;
+            }
+            this.itemHeight = rect.height;
+        }
+        const displayedItemHeight = this.itemHeight * this.displayedItems.length;
+        const displayBottomHeight = this.scrollTop + this.displayHeight;
+        const displayedItemHeightBelow = displayedItemHeight - displayBottomHeight;
+        const heightToAddBelow = displayedItemHeightBelow <= 0
+            ? 2 * this.displayHeight - displayedItemHeightBelow
+            : displayedItemHeightBelow < this.displayHeight
+                ? this.displayHeight
+                : 0;
+        if(heightToAddBelow > 0){
+            const nrOfItemsToAddBelow = Math.ceil(heightToAddBelow / this.itemHeight);
+            console.log(`want to add ${nrOfItemsToAddBelow} items below`)
+        }
+    }
+    private async addItemsBelow(nrItems: number, abortSignal?: AbortSignal): Promise<void> {
+        
+    }
+
+    private displayFirstItem(): void {
+        const first = this.data.items.items[0];
+        const element = this.createItemElement(first);
+        this.contentElement.appendChild(element);
+        this.displayedItems.push({
+            data: {
+                item: first,
+                hasNext: this.initialItemsLength > 1,
+                hasPrevious: this.data.items.hasPrevious
+            },
+            element
+        });
+        this.lastInitialDisplayedIndex = 0;
+    }
+    private createItemElement(item: TItem): VeryLongListItem {
+        const itemElement = document.createElement('very-long-list-item');
+        itemElement.appendChild(this.data.renderItem(item));
+        return itemElement;
+    }
+    static async create<TItem = unknown>(
+        data: VeryLongListData<TItem>,
+        contentElement: HTMLElement,
+        displayHeight: number | undefined,
+        abortSignal: AbortSignal
+    ): Promise<DisplayedVeryLongListData<TItem>> {
+        const result = new DisplayedVeryLongListData(data, contentElement);
+        if(displayHeight !== undefined){
+            await result.setHeight(displayHeight, abortSignal);
+        }
+        return result;
     }
 }
 
 class ConnectedVeryLongList {
+    private height: number | undefined;
+    private displayedData: DisplayedVeryLongListData | undefined
     private readonly scrollListener: () => void
-    private readonly observer: IntersectionObserver
+    private readonly intersectionObserver: IntersectionObserver
+    private readonly resizeObserver: ResizeObserver;
     private readonly scrollRequestedListener: (ev: ScrollRequestedEvent) => void
+    private throttledSetDataHeight = throttledWithAbort((abortSignal) => this.setDisplayedDataHeight(abortSignal), 300)
     constructor(
         public readonly containerElement: HTMLElement,
         public readonly contentElement: HTMLElement,
@@ -131,13 +217,43 @@ class ConnectedVeryLongList {
         const scrollListener = () => this.handleScroll();
         containerElement.addEventListener('scroll', scrollListener);
         this.scrollListener = scrollListener;
-        this.observer = new IntersectionObserver(
+        this.intersectionObserver = new IntersectionObserver(
             (entries) => this.handleObservedIntersections(entries),
             { root: containerElement }
         );
         const scrollRequestedListener = (e: ScrollRequestedEvent) => this.handleScrollRequested(e);
         scrollbar.addEventListener('scrollrequested', scrollRequestedListener);
         this.scrollRequestedListener = scrollRequestedListener;
+        const resizeObserver = new ResizeObserver((entries) => this.handleResize(entries));
+        resizeObserver.observe(containerElement);
+        this.resizeObserver = resizeObserver;
+    }
+
+    async displayData(data: VeryLongListData | undefined, abortSignal: AbortSignal): Promise<void> {
+        if(this.displayedData){
+            this.displayedData.destroy();
+            this.displayedData = undefined;
+        }
+        if(!data){
+            this.scrollbar.visible = false;
+            return;
+        }
+        this.displayedData = await DisplayedVeryLongListData.create(
+            data,
+            this.contentElement,
+            this.height,
+            abortSignal
+        );
+    }
+
+    destroy(): void {
+        this.containerElement.removeEventListener('scroll', this.scrollListener);
+        this.intersectionObserver.disconnect();
+        this.scrollbar.removeEventListener('scrollrequested', this.scrollRequestedListener);
+        this.resizeObserver.disconnect();
+        if(this.displayedData){
+            this.displayedData.destroy();
+        }
     }
 
     private handleScroll(): void {
@@ -150,6 +266,17 @@ class ConnectedVeryLongList {
 
     private handleObservedIntersections(entries: IntersectionObserverEntry[]): void {
 
+    }
+
+    private setDisplayedDataHeight(abortSignal: AbortSignal): void {
+        if(this.displayedData && this.height !== undefined){
+            this.displayedData.setHeight(this.height, abortSignal);
+        }
+    }
+
+    private handleResize([{contentRect: {height}}]: ResizeObserverEntry[]): void {
+        this.height = height;
+        this.throttledSetDataHeight();
     }
 
     static create(
@@ -175,19 +302,22 @@ export class VeryLongList extends HTMLElement {
         const shadow = this.attachShadow({mode: 'open'});
         shadow.appendChild(content);
         
-        const connectedList = ConnectedVeryLongList.create(
-            shadow
-        );
+        const connectedList = ConnectedVeryLongList.create(shadow);
         
-        // connectedList.scrollbar.addEventListener('scrollrequested', ({detail: { ratio }}) => {
-        //     console.log(`got request to scroll to ratio ${ratio}`);
-        // });
         this.connectedList = connectedList;
     }
 
-    public async setData(data: VeryLongListData | undefined): Promise<void>{
+    protected disconnectedCallback(){
+        if(this.connectedList){
+            this.connectedList.destroy();
+        }
+    }
 
-        
+    public async setData(data: VeryLongListData | undefined, abortSignal: AbortSignal): Promise<void>{
+        if(!this.connectedList){
+            return;
+        }
+        await this.connectedList.displayData(data, abortSignal);
     }
 }
 
