@@ -119,57 +119,6 @@ function *createItemsWithElements(
     }
 }
 
-class DisplayedVeryLongListData<TItem = unknown> {
-    constructor(
-        public readonly data: VeryLongListData<TItem>,
-        public readonly itemHeight: number,
-        public readonly height: number,
-        public readonly numberOfItemsInHeight: number,
-        public scrollbarThumbRatio: number,
-        public firstItemRelativePosition: number
-    ){
-
-    }
-
-    getScrolledRatio(scrollTop: number): number {
-        const partOfHeightScrolled = scrollTop / this.height;
-        return this.firstItemRelativePosition + partOfHeightScrolled * this.scrollbarThumbRatio;
-    }
-
-    async setPosition(items: ItemDataWithElement<TItem>[]): Promise<void> {
-        const itemsLength = items.length;
-        if(itemsLength === 0){
-            this.scrollbarThumbRatio = 0;
-            this.firstItemRelativePosition = 0;
-            return;
-        }
-        const firstItem = items[0].data;
-        const posFirst = await this.data.getRelativePositionOfItem(firstItem.item);
-        this.firstItemRelativePosition = posFirst;
-        if(itemsLength === 1){
-            if(firstItem.hasNext){
-                const { items: [secondItem] } = await this.data.getItemsAfterItem(firstItem.item, 1);
-                const posSecond = await this.data.getRelativePositionOfItem(secondItem);
-                const itemsRatio = posSecond - posFirst;
-                this.scrollbarThumbRatio = itemsRatio * this.height / this.itemHeight;
-                return;
-            }
-            if(firstItem.hasPrevious){
-                const { items: [itemBeforeFirst] } = await this.data.getItemsBeforeItem(firstItem.item, 1);
-                const posBeforeFirst = await this.data.getRelativePositionOfItem(itemBeforeFirst);
-                const itemsRatio = posFirst - posBeforeFirst;
-                this.scrollbarThumbRatio = itemsRatio * this.height / this.itemHeight;
-                return;
-            }
-            this.scrollbarThumbRatio = this.height / this.itemHeight;
-            return;
-        }
-        const posLast = await this.data.getRelativePositionOfItem(items[itemsLength - 1].data.item);
-        const itemsRatio = (posLast - posFirst) * itemsLength / (itemsLength - 1);
-        this.scrollbarThumbRatio = itemsRatio * this.height / (this.itemHeight * itemsLength);
-    }
-}
-
 class ConnectedVeryLongList {
     private readonly scrollListener: () => void
     private readonly observer: IntersectionObserver
