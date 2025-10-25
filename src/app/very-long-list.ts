@@ -122,6 +122,8 @@ class DisplayedVeryLongListData<TItem = unknown> {
     private displayedItems: ItemDataWithElement<TItem>[] = [];
     private lastInitialDisplayedIndex = -1;
     private initialItemsLength: number
+    private loading = false
+    private displayScheduled = false;
     private constructor(
         private readonly data: VeryLongListData<TItem>,
         private readonly contentElement: HTMLElement,
@@ -129,27 +131,25 @@ class DisplayedVeryLongListData<TItem = unknown> {
         this.initialItemsLength = data.items.items.length;
     }
     destroy(): void {
-
+        for(const displayedItem of this.displayedItems){
+            displayedItem.element.remove();
+        }
+        this.displayedItems.splice(0, this.displayedItems.length);
     }
     setHeight(height: number, abortSignal?: AbortSignal): void {
         this.displayHeight = height;
         this.display(abortSignal);
     }
     private async display(abortSignal?: AbortSignal): Promise<void> {
+        this.displayScheduled = false;
         if(this.displayHeight <= 0 || this.initialItemsLength === 0){
             return;
         }
         if(this.itemHeight === 0){
-            let firstItem = this.displayedItems[0];
-            if(!firstItem){
-                this.displayFirstItem();
-                firstItem = this.displayedItems[0];
-            }
-            const rect = await waitForAnimationFrameWhen(() => firstItem.element.getBoundingClientRect(), ({height}) => height > 0, 20, abortSignal);
-            if(rect.height === 0){
+            const didDetermineItemHeight = await this.determineItemHeight(abortSignal);
+            if(!didDetermineItemHeight){
                 return;
             }
-            this.itemHeight = rect.height;
         }
         const displayedItemHeight = this.itemHeight * this.displayedItems.length;
         const displayBottomHeight = this.scrollTop + this.displayHeight;
@@ -158,16 +158,80 @@ class DisplayedVeryLongListData<TItem = unknown> {
             ? 2 * this.displayHeight - displayedItemHeightBelow
             : displayedItemHeightBelow < this.displayHeight
                 ? this.displayHeight
-                : 0;
+                : displayedItemHeightBelow > 2 * this.displayHeight
+                    ? -this.displayHeight
+                    : 0;
         if(heightToAddBelow > 0){
+            console.log(`want to add a height of ${heightToAddBelow} below. item height is ${this.itemHeight}. display height is ${this.displayHeight}`)
             const nrOfItemsToAddBelow = Math.ceil(heightToAddBelow / this.itemHeight);
-            console.log(`want to add ${nrOfItemsToAddBelow} items below`)
+            await this.addItemsBelow(nrOfItemsToAddBelow, abortSignal);
         }
+        console.log(`finish display. display scheduled:`, this.displayScheduled)
     }
     private async addItemsBelow(nrItems: number, abortSignal?: AbortSignal): Promise<void> {
-        
+        console.log(`would like to add ${nrItems} below`)
+        let nrOfItemsAdded = 0;
+        while(this.lastInitialDisplayedIndex < this.initialItemsLength - 1 && nrOfItemsAdded < nrItems){
+            const initialIndexToDisplay = this.lastInitialDisplayedIndex + 1;
+            const item = this.data.items.items[initialIndexToDisplay];
+            const element = this.createItemElement(item);
+            this.contentElement.appendChild(element);
+            this.displayedItems.push({
+                data: {
+                    item,
+                    hasPrevious: initialIndexToDisplay > 0 || this.data.items.hasPrevious,
+                    hasNext: initialIndexToDisplay + 1 < this.initialItemsLength || this.data.items.hasNext
+                },
+                element
+            })
+            this.lastInitialDisplayedIndex = initialIndexToDisplay;
+            nrOfItemsAdded++;
+        }
+        if(nrOfItemsAdded >= nrItems){
+            return;
+        }
+        const lastDisplayedItem = this.displayedItems[this.displayedItems.length - 1];
+        if(!lastDisplayedItem || !lastDisplayedItem.data.hasNext){
+            return;
+        }
+        if(this.loading){
+            this.displayScheduled = true;
+            return;
+        }
+        const nextItems = await this.data.getItemsAfterItem(lastDisplayedItem.data.item, nrItems - nrOfItemsAdded, abortSignal);
+        if(nextItems.items.length === 0 || abortSignal?.aborted){
+            return;
+        }
+        let indexToDisplay = 0;
+        while(nrOfItemsAdded < nrItems && indexToDisplay < nextItems.items.length){
+            const item = nextItems.items[indexToDisplay];
+            const element = this.createItemElement(item);
+            this.contentElement.appendChild(element);
+            this.displayedItems.push({
+                data: {
+                    item,
+                    hasPrevious: true,
+                    hasNext: indexToDisplay + 1 < nextItems.items.length || nextItems.hasNext
+                },
+                element
+            });
+            indexToDisplay++;
+            nrOfItemsAdded++;
+        }
     }
-
+    private async determineItemHeight(abortSignal?: AbortSignal): Promise<boolean> {
+        let firstItem = this.displayedItems[0];
+        if(!firstItem){
+            this.displayFirstItem();
+            firstItem = this.displayedItems[0];
+        }
+        const rect = await waitForAnimationFrameWhen(() => firstItem.element.getBoundingClientRect(), ({height}) => height > 0, 20, abortSignal);
+        if(rect.height === 0){
+            return false;
+        }
+        this.itemHeight = rect.height;
+        return true;
+    }
     private displayFirstItem(): void {
         const first = this.data.items.items[0];
         const element = this.createItemElement(first);
@@ -175,7 +239,7 @@ class DisplayedVeryLongListData<TItem = unknown> {
         this.displayedItems.push({
             data: {
                 item: first,
-                hasNext: this.initialItemsLength > 1,
+                hasNext: this.initialItemsLength > 1 || this.data.items.hasNext,
                 hasPrevious: this.data.items.hasPrevious
             },
             element
