@@ -65,6 +65,28 @@ async function scrollElement(element: Element, scrollTop: number): Promise<void>
     }
 }
 
+function debounce(fn: () => Promise<void>, interval: number): () => void {
+    let busy = false;
+    let scheduled = false;
+    return execute;
+    async function execute(): Promise<void> {
+        if(busy){
+            scheduled = true;
+            return;
+        }
+        scheduled = false;
+        busy = true;
+        await Promise.all([
+            fn(),
+            waitMs(interval)
+        ])
+        busy = false;
+        if(scheduled){
+            execute();
+        }
+    }
+}
+
 class VeryLongListItem extends HTMLElement {
     
     connectedCallback(): void {
@@ -75,11 +97,6 @@ class VeryLongListItem extends HTMLElement {
     }
 }
 
-function createItemElement<TItem>(data: VeryLongListData, item: TItem): VeryLongListItem {
-    const itemElement = document.createElement('very-long-list-item');
-    itemElement.appendChild(data.renderItem(item));
-    return itemElement;
-}
 
 interface ItemData<TItem> {
     item: TItem
@@ -93,46 +110,41 @@ interface ItemDataWithElement<TItem = unknown> {
     element: Element
 }
 
-function queued(fn: () => Promise<void>): () => void {
-    let nrQueued = 0;
-    let running = false;
-    return () => run();
-    async function run(): Promise<void> {
-        if(running){
-            nrQueued++;
-            return;
-        }
-        if(nrQueued > 0){
-            nrQueued--;
-        }
-        running = true;
-        await fn();
-        running = false;
-        if(nrQueued === 0){
-            return;
-        }
-        run();
-    }
+interface DisplayedItemData<TItem, TDisplayedItem> {
+    displayedItem: DisplayedItem<TItem, TDisplayedItem>,
+    hasNext: boolean
+    hasPrevious: boolean
 }
 
-class DisplayedVeryLongListData<TItem = unknown> {
+interface DisplayedItem<TItem, TDisplayedItem> {
+    item: TItem
+    displayed: TDisplayedItem
+}
+
+interface VeryLongListContentDisplay<TItem, TDisplayedItem> {
+    appendItems(items: TItem[]): DisplayedItem<TItem, TDisplayedItem>[]
+    getDisplayedHeight(displayedItem: TDisplayedItem, abortSignal?: AbortSignal): Promise<number | undefined>
+    removeDisplayedItem(displayedItem: TDisplayedItem): void
+}
+
+class DisplayedVeryLongListData<TItem = unknown, TDisplayedItem = unknown> {
     private displayHeight = 0;
     private scrollTop = 0;
     private itemHeight = 0;
-    private displayedItems: ItemDataWithElement<TItem>[] = [];
+    private displayedItems: DisplayedItemData<TItem, TDisplayedItem>[] = [];
     private lastInitialDisplayedIndex = -1;
     private initialItemsLength: number
-    private loading = false
-    private displayScheduled = false;
+    private debouncedDisplay = debounce(() => this.display(), 200);
     private constructor(
         private readonly data: VeryLongListData<TItem>,
         private readonly contentElement: HTMLElement,
+        private readonly contentDisplay: VeryLongListContentDisplay<TItem, TDisplayedItem>
     ){
         this.initialItemsLength = data.items.items.length;
     }
     destroy(): void {
         for(const displayedItem of this.displayedItems){
-            displayedItem.element.remove();
+            this.contentDisplay.removeDisplayedItem(displayedItem.displayedItem.displayed);
         }
         this.displayedItems.splice(0, this.displayedItems.length);
     }
@@ -140,8 +152,11 @@ class DisplayedVeryLongListData<TItem = unknown> {
         this.displayHeight = height;
         this.display(abortSignal);
     }
+    setScrollTop(scrollTop: number): void {
+        this.scrollTop = scrollTop;
+        this.debouncedDisplay();
+    }
     private async display(abortSignal?: AbortSignal): Promise<void> {
-        this.displayScheduled = false;
         if(this.displayHeight <= 0 || this.initialItemsLength === 0){
             return;
         }
@@ -154,22 +169,35 @@ class DisplayedVeryLongListData<TItem = unknown> {
         const displayedItemHeight = this.itemHeight * this.displayedItems.length;
         const displayBottomHeight = this.scrollTop + this.displayHeight;
         const displayedItemHeightBelow = displayedItemHeight - displayBottomHeight;
-        const heightToAddBelow = displayedItemHeightBelow <= 0
+        const heightToAddBelow = displayedItemHeightBelow < 0
             ? 2 * this.displayHeight - displayedItemHeightBelow
             : displayedItemHeightBelow < this.displayHeight
                 ? this.displayHeight
                 : displayedItemHeightBelow > 2 * this.displayHeight
-                    ? -this.displayHeight
+                    ? this.displayHeight - displayedItemHeightBelow
                     : 0;
+        const heightToAddAbove = this.scrollTop === 0 
+            ? 2 * this.displayHeight
+            : this.scrollTop < this.displayHeight
+                ? this.displayHeight
+                : this.scrollTop > 2 * this.displayHeight
+                    ? this.displayHeight - this.scrollTop
+                    : 0;
+        if(heightToAddAbove < 0){
+            const nrOfItemsToRemoveAbove = Math.ceil(-heightToAddAbove / this.itemHeight);
+            console.log(`would like to remove ${nrOfItemsToRemoveAbove} items above`)
+        }
         if(heightToAddBelow > 0){
-            console.log(`want to add a height of ${heightToAddBelow} below. item height is ${this.itemHeight}. display height is ${this.displayHeight}`)
+            //console.log(`want to add a height of ${heightToAddBelow} below. item height is ${this.itemHeight}. display height is ${this.displayHeight}`)
             const nrOfItemsToAddBelow = Math.ceil(heightToAddBelow / this.itemHeight);
             await this.addItemsBelow(nrOfItemsToAddBelow, abortSignal);
+        }else if(heightToAddBelow < 0){
+            
         }
-        console.log(`finish display. display scheduled:`, this.displayScheduled)
+        
+        //console.log(`finish display. display scheduled:`, this.displayScheduled)
     }
     private async addItemsBelow(nrItems: number, abortSignal?: AbortSignal): Promise<void> {
-        console.log(`would like to add ${nrItems} below`)
         let nrOfItemsAdded = 0;
         while(this.lastInitialDisplayedIndex < this.initialItemsLength - 1 && nrOfItemsAdded < nrItems){
             const initialIndexToDisplay = this.lastInitialDisplayedIndex + 1;
@@ -194,10 +222,6 @@ class DisplayedVeryLongListData<TItem = unknown> {
         if(!lastDisplayedItem || !lastDisplayedItem.data.hasNext){
             return;
         }
-        if(this.loading){
-            this.displayScheduled = true;
-            return;
-        }
         const nextItems = await this.data.getItemsAfterItem(lastDisplayedItem.data.item, nrItems - nrOfItemsAdded, abortSignal);
         if(nextItems.items.length === 0 || abortSignal?.aborted){
             return;
@@ -218,6 +242,7 @@ class DisplayedVeryLongListData<TItem = unknown> {
             indexToDisplay++;
             nrOfItemsAdded++;
         }
+        console.log(`did add ${nrOfItemsAdded} items`)
     }
     private async determineItemHeight(abortSignal?: AbortSignal): Promise<boolean> {
         let firstItem = this.displayedItems[0];
@@ -246,18 +271,15 @@ class DisplayedVeryLongListData<TItem = unknown> {
         });
         this.lastInitialDisplayedIndex = 0;
     }
-    private createItemElement(item: TItem): VeryLongListItem {
-        const itemElement = document.createElement('very-long-list-item');
-        itemElement.appendChild(this.data.renderItem(item));
-        return itemElement;
-    }
-    static async create<TItem = unknown>(
+
+    static async create<TItem = unknown, TDisplayedItem = unknown>(
         data: VeryLongListData<TItem>,
         contentElement: HTMLElement,
+        contentDisplay: VeryLongListContentDisplay<TItem, TDisplayedItem>,
         displayHeight: number | undefined,
         abortSignal: AbortSignal
-    ): Promise<DisplayedVeryLongListData<TItem>> {
-        const result = new DisplayedVeryLongListData(data, contentElement);
+    ): Promise<DisplayedVeryLongListData<TItem, TDisplayedItem>> {
+        const result = new DisplayedVeryLongListData(data, contentElement, contentDisplay);
         if(displayHeight !== undefined){
             await result.setHeight(displayHeight, abortSignal);
         }
@@ -265,9 +287,45 @@ class DisplayedVeryLongListData<TItem = unknown> {
     }
 }
 
+class ContentDisplay<TItem> implements VeryLongListContentDisplay<TItem, VeryLongListItem> {
+    constructor(
+        private readonly containerElement: HTMLElement,
+        private readonly contentElement: HTMLElement,
+        private readonly data: VeryLongListData<TItem>
+    ){}
+
+    appendItems(items: TItem[]): DisplayedItem<TItem, VeryLongListItem>[] {
+        const result: DisplayedItem<TItem, VeryLongListItem>[] = [];
+        for(const item of items){
+            const displayed = this.createItemElement(item);
+            this.contentElement.appendChild(displayed);
+            result.push({ item, displayed })
+        }
+        return result;
+    }
+
+    removeDisplayedItem(item: VeryLongListItem): void {
+        item.remove();
+    }
+
+    async getDisplayedHeight(displayedItem: VeryLongListItem, abortSignal?: AbortSignal): Promise<number | undefined> {
+        const rect = await waitForAnimationFrameWhen(() => displayedItem.getBoundingClientRect(), ({height}) => height > 0, 20, abortSignal);
+        if(rect.height === 0){
+            return undefined;
+        }
+        return rect.height;
+    }
+
+    private createItemElement(item: TItem): VeryLongListItem {
+        const itemElement = document.createElement('very-long-list-item');
+        itemElement.appendChild(this.data.renderItem(item));
+        return itemElement;
+    }
+}
+
 class ConnectedVeryLongList {
     private height: number | undefined;
-    private displayedData: DisplayedVeryLongListData | undefined
+    private displayedData: DisplayedVeryLongListData<unknown, VeryLongListItem> | undefined
     private readonly scrollListener: () => void
     private readonly intersectionObserver: IntersectionObserver
     private readonly resizeObserver: ResizeObserver;
@@ -302,9 +360,10 @@ class ConnectedVeryLongList {
             this.scrollbar.visible = false;
             return;
         }
-        this.displayedData = await DisplayedVeryLongListData.create(
+        this.displayedData = await DisplayedVeryLongListData.create<unknown, VeryLongListItem>(
             data,
             this.contentElement,
+            new ContentDisplay(this.containerElement, this.contentElement, data),
             this.height,
             abortSignal
         );
@@ -321,7 +380,9 @@ class ConnectedVeryLongList {
     }
 
     private handleScroll(): void {
-
+        if(this.displayedData){
+            this.displayedData.setScrollTop(this.containerElement.scrollTop);
+        }
     }
 
     private handleScrollRequested({ detail: { ratio }}: ScrollRequestedEvent): void {
