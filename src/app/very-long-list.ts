@@ -171,7 +171,7 @@ class DisplayedVeryLongListData<TItem = unknown, TDisplayedItem = unknown> {
                     ? this.displayHeight - this.scrollTop
                     : 0;
         if(heightToAddAbove < 0){
-            const nrOfItemsToRemoveAbove = Math.ceil(-heightToAddAbove / this.itemHeight);
+            const nrOfItemsToRemoveAbove = Math.floor(-heightToAddAbove / this.itemHeight);
             this.removeItemsAbove(nrOfItemsToRemoveAbove);
         }
         if(heightToAddBelow < 0){
@@ -183,10 +183,10 @@ class DisplayedVeryLongListData<TItem = unknown, TDisplayedItem = unknown> {
             await this.displayItemsBelow(nrOfItemsToAddBelow, abortSignal);
         }
         if(heightToAddAbove > 0){
-            const nrOfItemsToAddAbove = Math.ceil(heightToAddAbove / this.itemHeight);
+            const nrOfItemsToAddAbove = Math.floor(heightToAddAbove / this.itemHeight);
             await this.displayItemsAbove(nrOfItemsToAddAbove, abortSignal);
         }
-        console.log(`number of items is now ${this.displayedItems.length}`)
+        console.log(`number of items: ${this.displayedItems.length}`)
     }
     private async displayItemsBelow(nrItems: number, abortSignal?: AbortSignal): Promise<void> {
         let nrOfItemsAdded = 0;
@@ -203,7 +203,6 @@ class DisplayedVeryLongListData<TItem = unknown, TDisplayedItem = unknown> {
             nrOfItemsAdded += nrOfInitialItemsToDisplay;
         }
         if(nrOfItemsAdded >= nrItems){
-            console.log(`did add ${nrOfInitialItemsToDisplay} items below`)
             return;
         }
         const lastDisplayedItem = this.displayedItems[this.displayedItems.length - 1];
@@ -216,7 +215,6 @@ class DisplayedVeryLongListData<TItem = unknown, TDisplayedItem = unknown> {
             return;
         }
         this.appendItems(nextItems.items, true, nextItems.hasNext);
-        console.log(`did add ${nrOfInitialItemsToDisplay + nextItems.items.length} items below`)
     }
     private async displayItemsAbove(nrItems: number, abortSignal?: AbortSignal): Promise<void> {
         const firstDisplayedItem = this.displayedItems[0];
@@ -229,7 +227,6 @@ class DisplayedVeryLongListData<TItem = unknown, TDisplayedItem = unknown> {
             return;
         }
         await this.prependItems(firstDisplayedItem.displayed, previousItems.items, previousItems.hasPrevious, true);
-        console.log(`did add ${previousItems.items.length} items above`)
     }
 
     private removeItemsAbove(nrItems: number): void {
@@ -237,14 +234,12 @@ class DisplayedVeryLongListData<TItem = unknown, TDisplayedItem = unknown> {
         for(const { displayed } of itemsToRemove){
             this.contentDisplay.removeDisplayedItem(displayed)
         }
-        console.log(`did remove ${nrItems} above`)
     }
     private removeItemsBelow(nrItems: number): void {
         const itemsToRemove = this.displayedItems.splice(this.displayedItems.length - nrItems, nrItems);
         for(const { displayed } of itemsToRemove){
             this.contentDisplay.removeDisplayedItem(displayed)
         }
-        console.log(`did remove ${nrItems} below`)
     }
     private appendItems(
         items: TItem[],
