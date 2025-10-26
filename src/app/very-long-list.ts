@@ -98,31 +98,19 @@ class VeryLongListItem extends HTMLElement {
 }
 
 
-interface ItemData<TItem> {
-    item: TItem
-    hasNext: boolean
-    hasPrevious: boolean
-}
-
-
-interface ItemDataWithElement<TItem = unknown> {
-    data: ItemData<TItem>
-    element: Element
-}
-
-interface DisplayedItemData<TItem, TDisplayedItem> {
-    displayedItem: DisplayedItem<TItem, TDisplayedItem>,
-    hasNext: boolean
-    hasPrevious: boolean
-}
-
 interface DisplayedItem<TItem, TDisplayedItem> {
     item: TItem
     displayed: TDisplayedItem
 }
 
+interface DisplayedItemData<TItem, TDisplayedItem> extends DisplayedItem<TItem, TDisplayedItem> {
+    hasNext: boolean
+    hasPrevious: boolean
+}
+
 interface VeryLongListContentDisplay<TItem, TDisplayedItem> {
     appendItems(items: TItem[]): DisplayedItem<TItem, TDisplayedItem>[]
+    prependItems(referenceItem: TDisplayedItem, items: TItem[], totalHeight: number): Promise<DisplayedItem<TItem, TDisplayedItem>[]>
     getDisplayedHeight(displayedItem: TDisplayedItem, abortSignal?: AbortSignal): Promise<number | undefined>
     removeDisplayedItem(displayedItem: TDisplayedItem): void
 }
@@ -134,17 +122,16 @@ class DisplayedVeryLongListData<TItem = unknown, TDisplayedItem = unknown> {
     private displayedItems: DisplayedItemData<TItem, TDisplayedItem>[] = [];
     private lastInitialDisplayedIndex = -1;
     private initialItemsLength: number
-    private debouncedDisplay = debounce(() => this.display(), 200);
+    private debouncedDisplay = debounce(() => this.display(), 100);
     private constructor(
         private readonly data: VeryLongListData<TItem>,
-        private readonly contentElement: HTMLElement,
         private readonly contentDisplay: VeryLongListContentDisplay<TItem, TDisplayedItem>
     ){
         this.initialItemsLength = data.items.items.length;
     }
     destroy(): void {
         for(const displayedItem of this.displayedItems){
-            this.contentDisplay.removeDisplayedItem(displayedItem.displayedItem.displayed);
+            this.contentDisplay.removeDisplayedItem(displayedItem.displayed);
         }
         this.displayedItems.splice(0, this.displayedItems.length);
     }
@@ -185,101 +172,135 @@ class DisplayedVeryLongListData<TItem = unknown, TDisplayedItem = unknown> {
                     : 0;
         if(heightToAddAbove < 0){
             const nrOfItemsToRemoveAbove = Math.ceil(-heightToAddAbove / this.itemHeight);
-            console.log(`would like to remove ${nrOfItemsToRemoveAbove} items above`)
+            this.removeItemsAbove(nrOfItemsToRemoveAbove);
+        }
+        if(heightToAddBelow < 0){
+            const nrOfItemsToRemoveBelow = Math.ceil(-heightToAddBelow / this.itemHeight);
+            this.removeItemsBelow(nrOfItemsToRemoveBelow);
         }
         if(heightToAddBelow > 0){
-            //console.log(`want to add a height of ${heightToAddBelow} below. item height is ${this.itemHeight}. display height is ${this.displayHeight}`)
             const nrOfItemsToAddBelow = Math.ceil(heightToAddBelow / this.itemHeight);
-            await this.addItemsBelow(nrOfItemsToAddBelow, abortSignal);
-        }else if(heightToAddBelow < 0){
-            
+            await this.displayItemsBelow(nrOfItemsToAddBelow, abortSignal);
         }
-        
-        //console.log(`finish display. display scheduled:`, this.displayScheduled)
+        if(heightToAddAbove > 0){
+            const nrOfItemsToAddAbove = Math.ceil(heightToAddAbove / this.itemHeight);
+            await this.displayItemsAbove(nrOfItemsToAddAbove, abortSignal);
+        }
+        console.log(`number of items is now ${this.displayedItems.length}`)
     }
-    private async addItemsBelow(nrItems: number, abortSignal?: AbortSignal): Promise<void> {
+    private async displayItemsBelow(nrItems: number, abortSignal?: AbortSignal): Promise<void> {
         let nrOfItemsAdded = 0;
-        while(this.lastInitialDisplayedIndex < this.initialItemsLength - 1 && nrOfItemsAdded < nrItems){
-            const initialIndexToDisplay = this.lastInitialDisplayedIndex + 1;
-            const item = this.data.items.items[initialIndexToDisplay];
-            const element = this.createItemElement(item);
-            this.contentElement.appendChild(element);
-            this.displayedItems.push({
-                data: {
-                    item,
-                    hasPrevious: initialIndexToDisplay > 0 || this.data.items.hasPrevious,
-                    hasNext: initialIndexToDisplay + 1 < this.initialItemsLength || this.data.items.hasNext
-                },
-                element
-            })
-            this.lastInitialDisplayedIndex = initialIndexToDisplay;
-            nrOfItemsAdded++;
+        const nrOfInitialItemsToDisplay = Math.min(this.initialItemsLength - this.lastInitialDisplayedIndex - 1, nrItems);
+        if(nrOfInitialItemsToDisplay > 0){
+            const firstInitialIndexToDisplay = this.lastInitialDisplayedIndex + 1;
+            const initialItemsToDisplay = this.data.items.items.slice(firstInitialIndexToDisplay, firstInitialIndexToDisplay + nrOfInitialItemsToDisplay);
+            this.appendItems(
+                initialItemsToDisplay,
+                firstInitialIndexToDisplay > 0 || this.data.items.hasPrevious,
+                firstInitialIndexToDisplay + nrOfInitialItemsToDisplay < this.initialItemsLength || this.data.items.hasNext
+            )
+            this.lastInitialDisplayedIndex += nrOfInitialItemsToDisplay;
+            nrOfItemsAdded += nrOfInitialItemsToDisplay;
         }
         if(nrOfItemsAdded >= nrItems){
+            console.log(`did add ${nrOfInitialItemsToDisplay} items below`)
             return;
         }
         const lastDisplayedItem = this.displayedItems[this.displayedItems.length - 1];
-        if(!lastDisplayedItem || !lastDisplayedItem.data.hasNext){
+        if(!lastDisplayedItem || !lastDisplayedItem.hasNext){
             return;
         }
-        const nextItems = await this.data.getItemsAfterItem(lastDisplayedItem.data.item, nrItems - nrOfItemsAdded, abortSignal);
+
+        const nextItems = await this.data.getItemsAfterItem(lastDisplayedItem.item, nrItems - nrOfItemsAdded, abortSignal);
         if(nextItems.items.length === 0 || abortSignal?.aborted){
             return;
         }
-        let indexToDisplay = 0;
-        while(nrOfItemsAdded < nrItems && indexToDisplay < nextItems.items.length){
-            const item = nextItems.items[indexToDisplay];
-            const element = this.createItemElement(item);
-            this.contentElement.appendChild(element);
-            this.displayedItems.push({
-                data: {
-                    item,
-                    hasPrevious: true,
-                    hasNext: indexToDisplay + 1 < nextItems.items.length || nextItems.hasNext
-                },
-                element
-            });
-            indexToDisplay++;
-            nrOfItemsAdded++;
+        this.appendItems(nextItems.items, true, nextItems.hasNext);
+        console.log(`did add ${nrOfInitialItemsToDisplay + nextItems.items.length} items below`)
+    }
+    private async displayItemsAbove(nrItems: number, abortSignal?: AbortSignal): Promise<void> {
+        const firstDisplayedItem = this.displayedItems[0];
+        if(!firstDisplayedItem || !firstDisplayedItem.hasPrevious){
+            return;
         }
-        console.log(`did add ${nrOfItemsAdded} items`)
+
+        const previousItems = await this.data.getItemsBeforeItem(firstDisplayedItem.item, nrItems, abortSignal);
+        if(previousItems.items.length === 0 || abortSignal?.aborted){
+            return;
+        }
+        await this.prependItems(firstDisplayedItem.displayed, previousItems.items, previousItems.hasPrevious, true);
+        console.log(`did add ${previousItems.items.length} items above`)
+    }
+
+    private removeItemsAbove(nrItems: number): void {
+        const itemsToRemove = this.displayedItems.splice(0, nrItems);
+        for(const { displayed } of itemsToRemove){
+            this.contentDisplay.removeDisplayedItem(displayed)
+        }
+        console.log(`did remove ${nrItems} above`)
+    }
+    private removeItemsBelow(nrItems: number): void {
+        const itemsToRemove = this.displayedItems.splice(this.displayedItems.length - nrItems, nrItems);
+        for(const { displayed } of itemsToRemove){
+            this.contentDisplay.removeDisplayedItem(displayed)
+        }
+        console.log(`did remove ${nrItems} below`)
+    }
+    private appendItems(
+        items: TItem[],
+        hasPrevious: boolean,
+        hasNext: boolean
+    ): void {
+        const displayedItems = this.contentDisplay.appendItems(items);
+        for(let i = 0; i < displayedItems.length; i++){
+            const { item, displayed } = displayedItems[i];
+            this.displayedItems.push({
+                item,
+                displayed,
+                hasPrevious: i > 0 || hasPrevious,
+                hasNext: i < displayedItems.length - 1 || hasNext
+            })
+        }
+    }
+    private async prependItems(
+        firstDisplayedItem: TDisplayedItem,
+        items: TItem[],
+        hasPrevious: boolean,
+        hasNext: boolean
+    ): Promise<void> {
+        const displayedItems = await this.contentDisplay.prependItems(firstDisplayedItem, items, items.length * this.itemHeight);
+        for(let i = displayedItems.length - 1; i >= 0; i--){
+            const { item, displayed } = displayedItems[i];
+            this.displayedItems.unshift({
+                item,
+                displayed,
+                hasPrevious: i > 0 || hasPrevious,
+                hasNext: i < displayedItems.length - 1 || hasNext
+            })
+        }
     }
     private async determineItemHeight(abortSignal?: AbortSignal): Promise<boolean> {
         let firstItem = this.displayedItems[0];
         if(!firstItem){
-            this.displayFirstItem();
+            this.appendItems(this.data.items.items.slice(0, 1), this.data.items.hasPrevious, this.initialItemsLength > 1 || this.data.items.hasNext)
+            this.lastInitialDisplayedIndex = 0;
             firstItem = this.displayedItems[0];
         }
-        const rect = await waitForAnimationFrameWhen(() => firstItem.element.getBoundingClientRect(), ({height}) => height > 0, 20, abortSignal);
-        if(rect.height === 0){
+        const height = await this.contentDisplay.getDisplayedHeight(firstItem.displayed, abortSignal);
+        if(height === undefined){
             return false;
         }
-        this.itemHeight = rect.height;
+        this.itemHeight = height;
         return true;
-    }
-    private displayFirstItem(): void {
-        const first = this.data.items.items[0];
-        const element = this.createItemElement(first);
-        this.contentElement.appendChild(element);
-        this.displayedItems.push({
-            data: {
-                item: first,
-                hasNext: this.initialItemsLength > 1 || this.data.items.hasNext,
-                hasPrevious: this.data.items.hasPrevious
-            },
-            element
-        });
-        this.lastInitialDisplayedIndex = 0;
     }
 
     static async create<TItem = unknown, TDisplayedItem = unknown>(
         data: VeryLongListData<TItem>,
-        contentElement: HTMLElement,
         contentDisplay: VeryLongListContentDisplay<TItem, TDisplayedItem>,
         displayHeight: number | undefined,
         abortSignal: AbortSignal
     ): Promise<DisplayedVeryLongListData<TItem, TDisplayedItem>> {
-        const result = new DisplayedVeryLongListData(data, contentElement, contentDisplay);
+        const result = new DisplayedVeryLongListData(data, contentDisplay);
         if(displayHeight !== undefined){
             await result.setHeight(displayHeight, abortSignal);
         }
@@ -301,6 +322,21 @@ class ContentDisplay<TItem> implements VeryLongListContentDisplay<TItem, VeryLon
             this.contentElement.appendChild(displayed);
             result.push({ item, displayed })
         }
+        return result;
+    }
+
+    async prependItems(referenceItem: VeryLongListItem, items: TItem[], totalHeight: number): Promise<DisplayedItem<TItem, VeryLongListItem>[]> {
+        const result: DisplayedItem<TItem, VeryLongListItem>[] = [];
+        const newScrollTop = this.containerElement.scrollTop + totalHeight;
+        let elementToInsertBefore = referenceItem;
+        for(let index = items.length - 1; index >= 0; index--){
+            const item = items[index];
+            const displayed = this.createItemElement(item);
+            this.contentElement.insertBefore(displayed, elementToInsertBefore);
+            result.unshift({ item, displayed })
+            elementToInsertBefore = displayed;
+        }
+        await scrollElement(this.containerElement, newScrollTop);
         return result;
     }
 
@@ -362,7 +398,6 @@ class ConnectedVeryLongList {
         }
         this.displayedData = await DisplayedVeryLongListData.create<unknown, VeryLongListItem>(
             data,
-            this.contentElement,
             new ContentDisplay(this.containerElement, this.contentElement, data),
             this.height,
             abortSignal
