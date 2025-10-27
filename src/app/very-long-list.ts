@@ -115,19 +115,33 @@ interface VeryLongListContentDisplay<TItem, TDisplayedItem> {
     removeDisplayedItem(displayedItem: TDisplayedItem): void
 }
 
+interface DisplayHeightRatioChangedEvent extends CustomEvent {
+    detail: {
+        displayHeightRatio: number
+    }
+}
+
+interface DisplayedVeryLongListDataEventMap {
+    'displayheightratiochanged': DisplayHeightRatioChangedEvent
+}
+
 class DisplayedVeryLongListData<TItem = unknown, TDisplayedItem = unknown> {
+    private eventTarget = new EventTarget();
     private displayHeight = 0;
+    private displayHeightRatio = Infinity
+    private firstItemRelativePosition: number | undefined;
     private scrollTop = 0;
+    public scrolledRatio = 0;
     private itemHeight = 0;
     private displayedItems: DisplayedItemData<TItem, TDisplayedItem>[] = [];
     private lastInitialDisplayedIndex = -1;
-    private initialItemsLength: number
+    private initialItems: VeryLongListItems<TItem>
     private debouncedDisplay = debounce(() => this.display(), 100);
     private constructor(
         private readonly data: VeryLongListData<TItem>,
         private readonly contentDisplay: VeryLongListContentDisplay<TItem, TDisplayedItem>
     ){
-        this.initialItemsLength = data.items.items.length;
+        this.initialItems = data.items;
     }
     destroy(): void {
         for(const displayedItem of this.displayedItems){
@@ -141,17 +155,25 @@ class DisplayedVeryLongListData<TItem = unknown, TDisplayedItem = unknown> {
     }
     setScrollTop(scrollTop: number): void {
         this.scrollTop = scrollTop;
+        this.setScrolledRatio();
         this.debouncedDisplay();
     }
+    addEventListener<TType extends keyof DisplayedVeryLongListDataEventMap>(type: TType, listener: (ev: DisplayedVeryLongListDataEventMap[TType]) => void): void {
+        this.eventTarget.addEventListener(type, listener as () => void)
+    }
+    removeEventListener<TType extends keyof DisplayedVeryLongListDataEventMap>(type: TType, listener: (ev: DisplayedVeryLongListDataEventMap[TType]) => void): void {
+        this.eventTarget.removeEventListener(type, listener as () => void)
+    }
     private async display(abortSignal?: AbortSignal): Promise<void> {
-        if(this.displayHeight <= 0 || this.initialItemsLength === 0){
+        if(this.displayHeight <= 0 || this.initialItems.items.length === 0){
             return;
         }
         if(this.itemHeight === 0){
-            const didDetermineItemHeight = await this.determineItemHeight(abortSignal);
-            if(!didDetermineItemHeight){
+            const itemHeight = await this.determineItemHeight(abortSignal);
+            if(itemHeight === undefined){
                 return;
             }
+            this.itemHeight = itemHeight;
         }
         const displayedItemHeight = this.itemHeight * this.displayedItems.length;
         const displayBottomHeight = this.scrollTop + this.displayHeight;
@@ -186,18 +208,24 @@ class DisplayedVeryLongListData<TItem = unknown, TDisplayedItem = unknown> {
             const nrOfItemsToAddAbove = Math.floor(heightToAddAbove / this.itemHeight);
             await this.displayItemsAbove(nrOfItemsToAddAbove, abortSignal);
         }
-        console.log(`number of items: ${this.displayedItems.length}`)
+        if(heightToAddAbove !== 0){
+            this.firstItemRelativePosition = await this.data.getRelativePositionOfItem(this.displayedItems[0].item);
+        }
+        if(this.displayHeightRatio === Infinity){
+            this.displayHeightRatio = await this.calculateDisplayHeightRatio();
+            this.eventTarget.dispatchEvent(new CustomEvent('displayheightratiochanged', {detail: {displayHeightRatio: this.displayHeightRatio}}))
+        }
     }
     private async displayItemsBelow(nrItems: number, abortSignal?: AbortSignal): Promise<void> {
         let nrOfItemsAdded = 0;
-        const nrOfInitialItemsToDisplay = Math.min(this.initialItemsLength - this.lastInitialDisplayedIndex - 1, nrItems);
+        const nrOfInitialItemsToDisplay = Math.min(this.initialItems.items.length - this.lastInitialDisplayedIndex - 1, nrItems);
         if(nrOfInitialItemsToDisplay > 0){
             const firstInitialIndexToDisplay = this.lastInitialDisplayedIndex + 1;
-            const initialItemsToDisplay = this.data.items.items.slice(firstInitialIndexToDisplay, firstInitialIndexToDisplay + nrOfInitialItemsToDisplay);
+            const initialItemsToDisplay = this.initialItems.items.slice(firstInitialIndexToDisplay, firstInitialIndexToDisplay + nrOfInitialItemsToDisplay);
             this.appendItems(
                 initialItemsToDisplay,
-                firstInitialIndexToDisplay > 0 || this.data.items.hasPrevious,
-                firstInitialIndexToDisplay + nrOfInitialItemsToDisplay < this.initialItemsLength || this.data.items.hasNext
+                firstInitialIndexToDisplay > 0 || this.initialItems.hasPrevious,
+                firstInitialIndexToDisplay + nrOfInitialItemsToDisplay < this.initialItems.items.length || this.initialItems.hasNext
             )
             this.lastInitialDisplayedIndex += nrOfInitialItemsToDisplay;
             nrOfItemsAdded += nrOfInitialItemsToDisplay;
@@ -274,19 +302,51 @@ class DisplayedVeryLongListData<TItem = unknown, TDisplayedItem = unknown> {
             })
         }
     }
-    private async determineItemHeight(abortSignal?: AbortSignal): Promise<boolean> {
+    private async determineItemHeight(abortSignal?: AbortSignal): Promise<number | undefined> {
         let firstItem = this.displayedItems[0];
         if(!firstItem){
-            this.appendItems(this.data.items.items.slice(0, 1), this.data.items.hasPrevious, this.initialItemsLength > 1 || this.data.items.hasNext)
+            this.appendItems(this.initialItems.items.slice(0, 1), this.initialItems.hasPrevious, this.initialItems.items.length > 1 || this.initialItems.hasNext)
             this.lastInitialDisplayedIndex = 0;
             firstItem = this.displayedItems[0];
         }
-        const height = await this.contentDisplay.getDisplayedHeight(firstItem.displayed, abortSignal);
-        if(height === undefined){
-            return false;
+        return await this.contentDisplay.getDisplayedHeight(firstItem.displayed, abortSignal);
+    }
+    private setScrolledRatio(): void {
+        const firstItemRelativePosition = this.firstItemRelativePosition;
+        if(firstItemRelativePosition === undefined){
+            return;
         }
-        this.itemHeight = height;
-        return true;
+        this.scrolledRatio = firstItemRelativePosition + this.displayHeightRatio * this.scrollTop / this.displayHeight;
+    }
+    private async calculateDisplayHeightRatio(abortSignal?: AbortSignal): Promise<number> {
+        const nrOfItems = this.displayedItems.length;
+        if(nrOfItems === 0){
+            return Infinity;
+        }
+        const firstItemRelativePosition = this.firstItemRelativePosition;
+        if(firstItemRelativePosition === undefined){
+            return Infinity;
+        }
+        const itemsHeight = this.itemHeight * nrOfItems;
+        if(nrOfItems === 1){
+            const firstItem = this.displayedItems[0];
+            if(firstItem.hasNext){
+                const { items: [secondItem] } = await this.data.getItemsAfterItem(firstItem.item, 1, abortSignal);
+                const posSecond = await this.data.getRelativePositionOfItem(secondItem, abortSignal);
+                const itemsRatio = posSecond - firstItemRelativePosition;
+                return itemsRatio * this.displayHeight / itemsHeight;
+            }
+            if(firstItem.hasPrevious){
+                const { items: [itemBeforeFirst] } = await this.data.getItemsBeforeItem(firstItem.item, 1, abortSignal);
+                const posBeforeFirst = await this.data.getRelativePositionOfItem(itemBeforeFirst, abortSignal);
+                const itemsRatio = firstItemRelativePosition - posBeforeFirst;
+                return itemsRatio * this.displayHeight / itemsHeight;
+            }
+            return this.displayHeight / itemsHeight;
+        }
+        const posLast = await this.data.getRelativePositionOfItem(this.displayedItems[nrOfItems - 1].item, abortSignal);
+        const itemsRatio = (posLast - firstItemRelativePosition) * nrOfItems / (nrOfItems - 1);
+        return itemsRatio * this.displayHeight / itemsHeight;
     }
 
     static async create<TItem = unknown, TDisplayedItem = unknown>(
@@ -358,7 +418,7 @@ class ConnectedVeryLongList {
     private height: number | undefined;
     private displayedData: DisplayedVeryLongListData<unknown, VeryLongListItem> | undefined
     private readonly scrollListener: () => void
-    private readonly intersectionObserver: IntersectionObserver
+    private readonly displayHeightRatioChangedListener: (ev: DisplayHeightRatioChangedEvent) => void
     private readonly resizeObserver: ResizeObserver;
     private readonly scrollRequestedListener: (ev: ScrollRequestedEvent) => void
     private throttledSetDataHeight = throttledWithAbort((abortSignal) => this.setDisplayedDataHeight(abortSignal), 300)
@@ -367,13 +427,10 @@ class ConnectedVeryLongList {
         public readonly contentElement: HTMLElement,
         public readonly scrollbar: VeryLongListScrollbar
     ){
+        this.displayHeightRatioChangedListener = (ev) => this.handleDisplayHeightRatioChanged(ev);
         const scrollListener = () => this.handleScroll();
         containerElement.addEventListener('scroll', scrollListener);
         this.scrollListener = scrollListener;
-        this.intersectionObserver = new IntersectionObserver(
-            (entries) => this.handleObservedIntersections(entries),
-            { root: containerElement }
-        );
         const scrollRequestedListener = (e: ScrollRequestedEvent) => this.handleScrollRequested(e);
         scrollbar.addEventListener('scrollrequested', scrollRequestedListener);
         this.scrollRequestedListener = scrollRequestedListener;
@@ -397,14 +454,15 @@ class ConnectedVeryLongList {
             this.height,
             abortSignal
         );
+        this.displayedData.addEventListener('displayheightratiochanged', this.displayHeightRatioChangedListener);
     }
 
     destroy(): void {
         this.containerElement.removeEventListener('scroll', this.scrollListener);
-        this.intersectionObserver.disconnect();
         this.scrollbar.removeEventListener('scrollrequested', this.scrollRequestedListener);
         this.resizeObserver.disconnect();
         if(this.displayedData){
+            this.displayedData.removeEventListener('displayheightratiochanged', this.displayHeightRatioChangedListener);
             this.displayedData.destroy();
         }
     }
@@ -412,6 +470,7 @@ class ConnectedVeryLongList {
     private handleScroll(): void {
         if(this.displayedData){
             this.displayedData.setScrollTop(this.containerElement.scrollTop);
+            this.scrollbar.scrolledRatio = this.displayedData.scrolledRatio;
         }
     }
 
@@ -419,8 +478,13 @@ class ConnectedVeryLongList {
 
     }
 
-    private handleObservedIntersections(entries: IntersectionObserverEntry[]): void {
-
+    private handleDisplayHeightRatioChanged({ detail: { displayHeightRatio }}: DisplayHeightRatioChangedEvent): void {
+        if(displayHeightRatio >= 1){
+            this.scrollbar.visible = false;
+            return;
+        }
+        this.scrollbar.visible = true;
+        this.scrollbar.thumbRatio = displayHeightRatio;
     }
 
     private setDisplayedDataHeight(abortSignal: AbortSignal): void {
