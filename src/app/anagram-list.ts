@@ -30,19 +30,19 @@ export function createAnagramList(): AnagramList {
             }
             return {
                 items: data,
-                getItemsAfterItem(item, maxItems) {
-                    return client.getItemsAfterItem({item, maxItems}, abortSignal)
+                getItemsAfterItem(item, maxItems, abortSignal2) {
+                    return client.getItemsAfterItem({item, maxItems}, abortSignal2 || abortSignal)
                 },
-                getItemsBeforeItem(item, maxItems) {
-                    return client.getItemsBeforeItem({item, maxItems}, abortSignal)
+                getItemsBeforeItem(item, maxItems, abortSignal2) {
+                    return client.getItemsBeforeItem({item, maxItems}, abortSignal2 || abortSignal)
                 },
                 renderItem(item) {
                     const span = document.createElement('span');
                     span.textContent = item.elements.join('');
                     return span;
                 },
-                getRelativePositionOfItem(item) {
-                    return client.getRelativePositionOfItem(item, abortSignal)
+                getRelativePositionOfItem(item, abortSignal2) {
+                    return client.getRelativePositionOfItem(item, abortSignal2 || abortSignal)
                 },
             };
         },
