@@ -38,7 +38,7 @@ export function createWorkerRequests(worker: Worker): WorkerRequests {
         }
     })
     return {
-        send<TResponse>(request: unknown, abortSignal: AbortSignal) {
+        send<TResponse>(request: unknown, abortSignal?: AbortSignal) {
             const { promise, resolve, reject } = Promise.withResolvers<TResponse>();
             const requestId = `${requestCount++}`
             requests.push({
@@ -46,7 +46,7 @@ export function createWorkerRequests(worker: Worker): WorkerRequests {
                 resolve,
                 reject
             });
-            abortSignal.addEventListener('abort', () => cancelRequest(requestId));
+            abortSignal?.addEventListener('abort', () => cancelRequest(requestId));
             worker.postMessage({
                 id: requestId,
                 payload: request

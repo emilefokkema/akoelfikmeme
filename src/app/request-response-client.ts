@@ -4,7 +4,7 @@ type Promised<T> = T extends PromiseLike<unknown> ? T : Promise<T>
 
 type MethodType<TClientProperty> = (
     request: TClientProperty extends (r: infer R, ...args: infer _) => unknown ? R : never,
-    abortSignal: AbortSignal
+    abortSignal?: AbortSignal
 ) => TClientProperty extends (...args: infer _) => infer R ? Promised<R> : never
 
 type RequestResponseClient<TClient> = {

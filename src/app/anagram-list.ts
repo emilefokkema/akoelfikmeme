@@ -31,10 +31,10 @@ export function createAnagramList(): AnagramList {
             return {
                 items: data,
                 getItemsAfterItem(item, maxItems, abortSignal2) {
-                    return client.getItemsAfterItem({item, maxItems}, abortSignal2 || abortSignal)
+                    return client.getItemsAfterItem({item, maxItems}, abortSignal2)
                 },
                 getItemsBeforeItem(item, maxItems, abortSignal2) {
-                    return client.getItemsBeforeItem({item, maxItems}, abortSignal2 || abortSignal)
+                    return client.getItemsBeforeItem({item, maxItems}, abortSignal2)
                 },
                 renderItem(item) {
                     const span = document.createElement('span');
@@ -42,7 +42,7 @@ export function createAnagramList(): AnagramList {
                     return span;
                 },
                 getRelativePositionOfItem(item, abortSignal2) {
-                    return client.getRelativePositionOfItem(item, abortSignal2 || abortSignal)
+                    return client.getRelativePositionOfItem(item, abortSignal2)
                 },
             };
         },
