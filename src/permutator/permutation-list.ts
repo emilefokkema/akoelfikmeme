@@ -415,4 +415,8 @@ export class PermutationList {
         const valuesToUse = uniqueValuePermutation.index.map(i => this.valueMap.valueAt(i))
         return new PermutationImpl(valuesToUse, uniqueValuePermutation, this.valueMap)
     }
+
+    getPermutationAtRelativePosition(relativePosition: number): Permutation | undefined {
+        return undefined;
+    }
 }

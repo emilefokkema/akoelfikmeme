@@ -148,4 +148,6 @@ describe('permutator', () => {
         const perm = list.getPermutation(permutation);
         expect(perm?.getPosition()).toBeCloseTo(expectedPosition)
     })
+
+    
 })
