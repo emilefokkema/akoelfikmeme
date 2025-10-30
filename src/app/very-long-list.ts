@@ -55,6 +55,7 @@ async function scrollElement(element: Element, scrollTop: number): Promise<void>
             break;
         }
         const controller = new AbortController();
+        console.log(`setting scrollTop of ${scrollTop} on element`, element)
         element.scrollTop = scrollTop;
         await Promise.race([
             whenElementScrolled(element, controller.signal),
@@ -113,6 +114,7 @@ interface VeryLongListContentDisplay<TItem, TDisplayedItem> {
     prependItems(referenceItem: TDisplayedItem, items: TItem[], totalHeight: number): Promise<DisplayedItem<TItem, TDisplayedItem>[]>
     getDisplayedHeight(displayedItem: TDisplayedItem, abortSignal?: AbortSignal): Promise<number | undefined>
     removeDisplayedItem(displayedItem: TDisplayedItem): void
+    scrollTo(scrollTop: number): Promise<void>
 }
 
 interface DisplayHeightRatioChangedEvent extends CustomEvent {
@@ -137,6 +139,7 @@ class DisplayedVeryLongListData<TItem = unknown, TDisplayedItem = unknown> {
     private lastInitialDisplayedIndex = -1;
     private initialItems: VeryLongListItems<TItem>
     private debouncedDisplay = debounce(() => this.display(), 100);
+    private ignoreScrollTop = false;
     private constructor(
         private readonly data: VeryLongListData<TItem>,
         private readonly contentDisplay: VeryLongListContentDisplay<TItem, TDisplayedItem>
@@ -154,6 +157,10 @@ class DisplayedVeryLongListData<TItem = unknown, TDisplayedItem = unknown> {
         this.display(abortSignal);
     }
     setScrollTop(scrollTop: number): void {
+        if(this.ignoreScrollTop){
+            console.log(`received scroll top ${scrollTop}, but ignoring it`);
+            return;
+        }
         this.scrollTop = scrollTop;
         this.setScrolledRatio();
         this.debouncedDisplay();
@@ -163,6 +170,30 @@ class DisplayedVeryLongListData<TItem = unknown, TDisplayedItem = unknown> {
     }
     removeEventListener<TType extends keyof DisplayedVeryLongListDataEventMap>(type: TType, listener: (ev: DisplayedVeryLongListDataEventMap[TType]) => void): void {
         this.eventTarget.removeEventListener(type, listener as () => void)
+    }
+    async scrollTo(relativePosition: number): Promise<void> {
+        const firstItemRelativePosition = this.firstItemRelativePosition;
+        if(firstItemRelativePosition === undefined){
+            return;
+        }
+        if(relativePosition < firstItemRelativePosition){
+            console.log(`cannot scroll to ${relativePosition}; need more items above`);
+            return;
+        }
+        const relativeDisplayedHeight = this.displayHeightRatio * this.displayedItems.length * this.itemHeight / this.displayHeight;
+        const lowestDisplayedPosition = firstItemRelativePosition + relativeDisplayedHeight;
+        if(relativePosition > lowestDisplayedPosition){
+            console.log(`cannot scroll to ${relativePosition}; need more items below`);
+            return;
+        }
+        const positionToScrollTo = this.displayHeight * (relativePosition - firstItemRelativePosition) / this.displayHeightRatio;
+        console.log(`going to scroll to position ${positionToScrollTo}`)
+        this.ignoreScrollTop = true;
+        await this.contentDisplay.scrollTo(positionToScrollTo);
+        console.log(`the display did scroll to ${positionToScrollTo}`)
+        this.ignoreScrollTop = false;
+        this.scrollTop = positionToScrollTo;
+        this.debouncedDisplay();
     }
     private async display(abortSignal?: AbortSignal): Promise<void> {
         if(this.displayHeight <= 0 || this.initialItems.items.length === 0){
@@ -399,6 +430,10 @@ class ContentDisplay<TItem> implements VeryLongListContentDisplay<TItem, VeryLon
         item.remove();
     }
 
+    scrollTo(scrollTop: number): Promise<void> {
+        return scrollElement(this.containerElement, scrollTop);
+    }
+
     async getDisplayedHeight(displayedItem: VeryLongListItem, abortSignal?: AbortSignal): Promise<number | undefined> {
         const rect = await waitForAnimationFrameWhen(() => displayedItem.getBoundingClientRect(), ({height}) => height > 0, 20, abortSignal);
         if(rect.height === 0){
@@ -475,7 +510,10 @@ class ConnectedVeryLongList {
     }
 
     private handleScrollRequested({ detail: { ratio }}: ScrollRequestedEvent): void {
-
+        if(!this.displayedData){
+            return;
+        }
+        this.displayedData.scrollTo(ratio)
     }
 
     private handleDisplayHeightRatioChanged({ detail: { displayHeightRatio }}: DisplayHeightRatioChangedEvent): void {
