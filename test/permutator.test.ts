@@ -130,8 +130,8 @@ describe('permutator', () => {
     it.each([
         [[0, 1, 1, 2, 2, 2], [0, 1, 1, 2, 2, 2], 0],
         [[0, 1, 1, 2, 2, 2], [1, 2, 0, 1, 2, 2], 18 / 60], // 19th of 60
-        [[0, 1, 1, 2, 2, 2], [1, 2, 0, 2, 1, 2], 19 / 60], // 19th of 60
-        [[0, 1, 1, 2, 2, 2], [2, 2, 2, 1, 1, 0], 59 / 60], // 19th of 60
+        [[0, 1, 1, 2, 2, 2], [1, 2, 0, 2, 1, 2], 19 / 60], // 20th of 60
+        [[0, 1, 1, 2, 2, 2], [2, 2, 2, 1, 1, 0], 59 / 60], // 60th of 60
         [[0, 1, 2, 3, 0], [0, 1, 2, 3, 0], 0],
         [[0, 1, 2, 3, 0], [0, 0, 3, 2, 1], 23 / 60], // 24th of 60
         [[0, 1, 2, 3, 0], [1, 0, 2, 3, 0], 24 / 60], // 25th of 60
@@ -147,5 +147,27 @@ describe('permutator', () => {
         const list = new PermutationList(first);
         const perm = list.getPermutation(permutation);
         expect(perm?.getPosition()).toBeCloseTo(expectedPosition)
+    })
+
+    it.each([
+        [[0, 1, 1, 2, 2, 2], 0, [0, 1, 1, 2, 2, 2]],
+        [[0, 1, 1, 2, 2, 2], 18 / 60 + 1 / 120, [1, 2, 0, 1, 2, 2]], // 19th of 60
+        [[0, 1, 1, 2, 2, 2], 19 / 60 + 1 / 120, [1, 2, 0, 2, 1, 2]], // 20th of 60
+        [[0, 1, 1, 2, 2, 2], 59 / 60 + 1 / 120, [2, 2, 2, 1, 1, 0]], // 60th of 60
+        [[0, 1, 2, 3, 0], 0, [0, 1, 2, 3, 0]],
+        [[0, 1, 2, 3, 0], 23 / 60 + 1 / 120, [0, 0, 3, 2, 1]], // 24th of 60
+        [[0, 1, 2, 3, 0], 24 / 60 + 1 / 120, [1, 0, 2, 3, 0]], // 25th of 60
+        [[0, 1, 2, 1, 3], 0, [0, 1, 2, 1, 3]],
+        [[0, 1, 2, 1, 3], 7 / 60 + 1 / 120, [0, 2, 1, 3, 1]], // 8th of 60
+        [[0, 1, 2, 1, 3], 50 / 60 + 1 / 120, [3, 0, 2, 1, 1]], // 51st of 60
+        [[0, 1, 2, 1, 3], 30 / 60 + 1 / 120, [1, 3, 0, 2, 1]], // 31st of 60
+        [[0], 0, [0]],
+        [[0, 1], 0, [0, 1]],
+        [[0, 1], 3 / 4, [1, 0]],
+        [[4, 1, 4, 3, 4, 5, 9, 2], 3 / 13440, [4, 1, 4, 3, 4, 5, 2, 9]] // 2nd of 6720
+    ])('should return permutation at relative position', (first, relativePosition, expectedPermutation) => {
+        const list = new PermutationList(first);
+        const permutation = list.getPermutationAtRelativePosition(relativePosition);
+        expect(permutation?.value).toEqual(expectedPermutation)
     })
 })
