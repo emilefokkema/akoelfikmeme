@@ -50,9 +50,10 @@ function waitMs(ms: number): Promise<void> {
 }
 
 async function scrollElement(element: Element, scrollTop: number): Promise<void> {
-    while(true){
+    let nrOfAttempts = 0;
+    while(nrOfAttempts < 5){
         if(Math.abs(element.scrollTop - scrollTop) < 3){
-            break;
+            return;
         }
         const controller = new AbortController();
         element.scrollTop = scrollTop;
@@ -61,8 +62,9 @@ async function scrollElement(element: Element, scrollTop: number): Promise<void>
             waitMs(10)
         ]);
         controller.abort();
-
+        nrOfAttempts++;
     }
+    throw new Error('Could not scroll the element')
 }
 
 function debounce(fn: () => Promise<void>, interval: number): () => void {
