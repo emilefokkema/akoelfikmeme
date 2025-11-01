@@ -160,6 +160,21 @@ class DisplayedVeryLongListData<TItem = unknown, TDisplayedItem = unknown> {
         this.setScrolledRatio();
         this.debouncedDisplay();
     }
+    getScrollTopAtRelativePosition(relativePosition: number): number | undefined {
+        const firstItemRelativePosition = this.firstItemRelativePosition;
+        if(firstItemRelativePosition === undefined){
+            return undefined;
+        }
+        if(relativePosition < firstItemRelativePosition){
+            return undefined;
+        }
+        const relativeDisplayedHeight = this.displayHeightRatio * this.displayedItems.length * this.itemHeight / this.displayHeight;
+        const lowestScrollablePosition = Math.max(firstItemRelativePosition, firstItemRelativePosition + relativeDisplayedHeight - this.displayHeightRatio);
+        if(relativePosition > lowestScrollablePosition){
+            return undefined;
+        }
+        return this.displayHeight * (relativePosition - firstItemRelativePosition) / this.displayHeightRatio;
+    }
     addEventListener<TType extends keyof DisplayedVeryLongListDataEventMap>(type: TType, listener: (ev: DisplayedVeryLongListDataEventMap[TType]) => void): void {
         this.eventTarget.addEventListener(type, listener as () => void)
     }
@@ -212,6 +227,7 @@ class DisplayedVeryLongListData<TItem = unknown, TDisplayedItem = unknown> {
         }
         if(heightToAddAbove !== 0){
             this.firstItemRelativePosition = await this.data.getRelativePositionOfItem(this.displayedItems[0].item);
+            this.setScrolledRatio()
         }
         if(this.displayHeightRatio === Infinity){
             this.displayHeightRatio = await this.calculateDisplayHeightRatio();
@@ -471,13 +487,24 @@ class ConnectedVeryLongList {
 
     private handleScroll(): void {
         if(this.displayedData){
-            this.displayedData.setScrollTop(this.containerElement.scrollTop);
-            this.scrollbar.scrolledRatio = this.displayedData.scrolledRatio;
+            const scrollTop = this.containerElement.scrollTop;
+            this.displayedData.setScrollTop(scrollTop);
+            const scrolledRatio = this.displayedData.scrolledRatio;
+            this.scrollbar.scrolledRatio = scrolledRatio;
         }
     }
 
     private handleScrollRequested({ detail: { ratio }}: ScrollRequestedEvent): void {
-
+        if(!this.displayedData){
+            return;
+        }
+        const scrollTop = this.displayedData.getScrollTopAtRelativePosition(ratio);
+        if(scrollTop === undefined){
+            console.log('cannot scroll there');
+            return;
+        }
+        console.log(`about to scroll to ${scrollTop}`)
+        scrollElement(this.containerElement, scrollTop)
     }
 
     private handleDisplayHeightRatioChanged({ detail: { displayHeightRatio }}: DisplayHeightRatioChangedEvent): void {
