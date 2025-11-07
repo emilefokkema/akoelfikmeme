@@ -3,15 +3,44 @@ import type { VeryLongListData, VeryLongListItems } from "./very-long-list-data"
 import './very-long-list-scrollbar'
 import type { ScrollRequestedEvent, VeryLongListScrollbar } from "./very-long-list-scrollbar";
 
-function whenElementScrolled(element: Element, signal: AbortSignal): Promise<void> {
-    return new Promise<void>((res, rej) => {
-        const listener = () => {
-            element.removeEventListener('scroll', listener);
-            res();
+class ElementScroller {
+    private readonly scrollListener: () => void
+    private onDidScroll: (() => void) | undefined;
+    constructor(private readonly element: Element){
+        this.scrollListener = () => this.handleScroll();
+        element.addEventListener('scroll', this.scrollListener);
+    }
+    destroy(): void {
+        this.element.removeEventListener('scroll', this.scrollListener);
+    }
+    async scrollTo(scrollTop: number): Promise<void> {
+        let nrOfAttempts = 0;
+        while(nrOfAttempts < 5){
+            const actual = this.element.scrollTop;
+            if(Math.abs(actual - scrollTop) < 3){
+                return;
+            }
+            const scrollPromise = this.whenScrolled();
+            this.element.scrollTop = scrollTop;
+            await Promise.race([
+                scrollPromise,
+                waitMs(10)
+            ])
+            nrOfAttempts++;
         }
-        element.addEventListener('scroll', listener);
-        signal.addEventListener('abort', rej);
-    })
+        throw new Error('Could not scroll the element')
+    }
+    private whenScrolled(): Promise<void> {
+        return new Promise((res) => {
+            this.onDidScroll = res;
+        })
+    }
+    private handleScroll(): void {
+        if(this.onDidScroll){
+            this.onDidScroll();
+            this.onDidScroll = undefined;
+        }
+    }
 }
 
 function waitForAnimationFrameWhen<T>(
@@ -47,24 +76,6 @@ function waitForAnimationFrameWhen<T>(
 
 function waitMs(ms: number): Promise<void> {
     return new Promise(res => setTimeout(res, ms))
-}
-
-async function scrollElement(element: Element, scrollTop: number): Promise<void> {
-    let nrOfAttempts = 0;
-    while(nrOfAttempts < 5){
-        if(Math.abs(element.scrollTop - scrollTop) < 3){
-            return;
-        }
-        const controller = new AbortController();
-        element.scrollTop = scrollTop;
-        await Promise.race([
-            whenElementScrolled(element, controller.signal),
-            waitMs(10)
-        ]);
-        controller.abort();
-        nrOfAttempts++;
-    }
-    throw new Error('Could not scroll the element')
 }
 
 function debounce(fn: () => Promise<void>, interval: number): () => void {
@@ -123,8 +134,15 @@ interface DisplayHeightRatioChangedEvent extends CustomEvent {
     }
 }
 
+interface ScrolledRatioChangedEvent extends CustomEvent {
+    detail: {
+        scrolledRatio: number
+    }
+}
+
 interface DisplayedVeryLongListDataEventMap {
     'displayheightratiochanged': DisplayHeightRatioChangedEvent
+    'scrolledratiochanged': ScrolledRatioChangedEvent
 }
 
 class DisplayedVeryLongListData<TItem = unknown, TDisplayedItem = unknown> {
@@ -133,7 +151,6 @@ class DisplayedVeryLongListData<TItem = unknown, TDisplayedItem = unknown> {
     private displayHeightRatio = Infinity
     private firstItemRelativePosition: number | undefined;
     private scrollTop = 0;
-    public scrolledRatio = 0;
     private itemHeight = 0;
     private displayedItems: DisplayedItemData<TItem, TDisplayedItem>[] = [];
     private lastInitialDisplayedIndex = -1;
@@ -159,6 +176,23 @@ class DisplayedVeryLongListData<TItem = unknown, TDisplayedItem = unknown> {
         this.scrollTop = scrollTop;
         this.setScrolledRatio();
         this.debouncedDisplay();
+    }
+    getScrollTopAtRelativePosition(relativePosition: number): number | undefined {
+        const firstItemRelativePosition = this.firstItemRelativePosition;
+        if(firstItemRelativePosition === undefined){
+            return undefined;
+        }
+        if(relativePosition < firstItemRelativePosition){
+            return undefined;
+        }
+        const displayedHeight = this.displayedItems.length * this.itemHeight;
+        const relativeDisplayedHeight = this.displayHeightRatio * displayedHeight / this.displayHeight;
+        const lowestScrollablePosition = Math.max(firstItemRelativePosition, firstItemRelativePosition + relativeDisplayedHeight - this.displayHeightRatio);
+        if(relativePosition > lowestScrollablePosition){
+            return undefined;
+        }
+        const result = this.displayHeight * (relativePosition - firstItemRelativePosition) / this.displayHeightRatio;
+        return result;
     }
     addEventListener<TType extends keyof DisplayedVeryLongListDataEventMap>(type: TType, listener: (ev: DisplayedVeryLongListDataEventMap[TType]) => void): void {
         this.eventTarget.addEventListener(type, listener as () => void)
@@ -212,6 +246,7 @@ class DisplayedVeryLongListData<TItem = unknown, TDisplayedItem = unknown> {
         }
         if(heightToAddAbove !== 0){
             this.firstItemRelativePosition = await this.data.getRelativePositionOfItem(this.displayedItems[0].item);
+            this.setScrolledRatio()
         }
         if(this.displayHeightRatio === Infinity){
             this.displayHeightRatio = await this.calculateDisplayHeightRatio();
@@ -318,7 +353,9 @@ class DisplayedVeryLongListData<TItem = unknown, TDisplayedItem = unknown> {
         if(firstItemRelativePosition === undefined){
             return;
         }
-        this.scrolledRatio = firstItemRelativePosition + this.displayHeightRatio * this.scrollTop / this.displayHeight;
+        const newScrolledRatio = firstItemRelativePosition + this.displayHeightRatio * this.scrollTop / this.displayHeight;
+        const event: ScrolledRatioChangedEvent = new CustomEvent('scrolledratiochanged', { detail: { scrolledRatio: newScrolledRatio }});
+        this.eventTarget.dispatchEvent(event);
     }
     private async calculateDisplayHeightRatio(abortSignal?: AbortSignal): Promise<number> {
         const nrOfItems = this.displayedItems.length;
@@ -368,6 +405,7 @@ class DisplayedVeryLongListData<TItem = unknown, TDisplayedItem = unknown> {
 class ContentDisplay<TItem> implements VeryLongListContentDisplay<TItem, VeryLongListItem> {
     constructor(
         private readonly containerElement: HTMLElement,
+        private readonly containerElementScroller: ElementScroller,
         private readonly contentElement: HTMLElement,
         private readonly data: VeryLongListData<TItem>
     ){}
@@ -393,7 +431,7 @@ class ContentDisplay<TItem> implements VeryLongListContentDisplay<TItem, VeryLon
             result.unshift({ item, displayed })
             elementToInsertBefore = displayed;
         }
-        await scrollElement(this.containerElement, newScrollTop);
+        await this.containerElementScroller.scrollTo(newScrollTop);
         return result;
     }
 
@@ -421,15 +459,19 @@ class ConnectedVeryLongList {
     private displayedData: DisplayedVeryLongListData<unknown, VeryLongListItem> | undefined
     private readonly scrollListener: () => void
     private readonly displayHeightRatioChangedListener: (ev: DisplayHeightRatioChangedEvent) => void
+    private readonly scrolledRatioChangedListener: (ev: ScrolledRatioChangedEvent) => void
     private readonly resizeObserver: ResizeObserver;
     private readonly scrollRequestedListener: (ev: ScrollRequestedEvent) => void
+    private readonly containerElementScroller: ElementScroller;
     private throttledSetDataHeight = throttledWithAbort((abortSignal) => this.setDisplayedDataHeight(abortSignal), 300)
     constructor(
         public readonly containerElement: HTMLElement,
         public readonly contentElement: HTMLElement,
         public readonly scrollbar: VeryLongListScrollbar
     ){
+        this.containerElementScroller = new ElementScroller(containerElement);
         this.displayHeightRatioChangedListener = (ev) => this.handleDisplayHeightRatioChanged(ev);
+        this.scrolledRatioChangedListener = (ev) => this.handleScrolledRatioChanged(ev)
         const scrollListener = () => this.handleScroll();
         containerElement.addEventListener('scroll', scrollListener);
         this.scrollListener = scrollListener;
@@ -452,32 +494,48 @@ class ConnectedVeryLongList {
         }
         this.displayedData = await DisplayedVeryLongListData.create<unknown, VeryLongListItem>(
             data,
-            new ContentDisplay(this.containerElement, this.contentElement, data),
+            new ContentDisplay(
+                this.containerElement,
+                this.containerElementScroller,
+                this.contentElement,
+                data
+            ),
             this.height,
             abortSignal
         );
         this.displayedData.addEventListener('displayheightratiochanged', this.displayHeightRatioChangedListener);
+        this.displayedData.addEventListener('scrolledratiochanged', this.scrolledRatioChangedListener)
     }
 
     destroy(): void {
+        this.containerElementScroller.destroy();
         this.containerElement.removeEventListener('scroll', this.scrollListener);
         this.scrollbar.removeEventListener('scrollrequested', this.scrollRequestedListener);
         this.resizeObserver.disconnect();
         if(this.displayedData){
             this.displayedData.removeEventListener('displayheightratiochanged', this.displayHeightRatioChangedListener);
+            this.displayedData.removeEventListener('scrolledratiochanged', this.scrolledRatioChangedListener)
             this.displayedData.destroy();
         }
     }
 
     private handleScroll(): void {
         if(this.displayedData){
-            this.displayedData.setScrollTop(this.containerElement.scrollTop);
-            this.scrollbar.scrolledRatio = this.displayedData.scrolledRatio;
+            const scrollTop = this.containerElement.scrollTop;
+            this.displayedData.setScrollTop(scrollTop);
         }
     }
 
     private handleScrollRequested({ detail: { ratio }}: ScrollRequestedEvent): void {
-
+        if(!this.displayedData){
+            return;
+        }
+        const scrollTop = this.displayedData.getScrollTopAtRelativePosition(ratio);
+        if(scrollTop === undefined){
+            console.log('cannot scroll there');
+            return;
+        }
+        this.containerElementScroller.scrollTo(scrollTop)
     }
 
     private handleDisplayHeightRatioChanged({ detail: { displayHeightRatio }}: DisplayHeightRatioChangedEvent): void {
@@ -487,6 +545,10 @@ class ConnectedVeryLongList {
         }
         this.scrollbar.visible = true;
         this.scrollbar.thumbRatio = displayHeightRatio;
+    }
+
+    private handleScrolledRatioChanged({detail: { scrolledRatio }}: ScrolledRatioChangedEvent): void {
+        this.scrollbar.scrolledRatio = scrolledRatio;
     }
 
     private setDisplayedDataHeight(abortSignal: AbortSignal): void {
