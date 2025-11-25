@@ -1,14 +1,14 @@
 import { createAnagramList } from './anagram-list';
 import './very-long-list';
 import './anagram-input';
-import { throttledWithAbort } from './throttled-with-abort';
+import { debounceWithAbort } from './debounce-with-abort';
 
 async function initialize(): Promise<void> {
     const anagramList = createAnagramList();
     const input = document.querySelector('anagram-input')!;
     const veryLongList = document.querySelector('very-long-list')!;
 
-    input.addEventListener('input', throttledWithAbort(async (abortSignal) => {
+    input.addEventListener('input', debounceWithAbort(async (abortSignal) => {
         await anagramList.setElements(input.value, abortSignal);
         if(abortSignal.aborted){
             return;

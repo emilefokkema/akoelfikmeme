@@ -1,4 +1,4 @@
-export function throttledWithAbort(fn: (abortSignal: AbortSignal) => unknown, interval: number): () => void {
+export function debounceWithAbort(fn: (abortSignal: AbortSignal) => unknown, interval: number): () => void {
     let abortController: AbortController | undefined;
     let timeout: ReturnType<typeof setTimeout> | undefined;
     return () => {

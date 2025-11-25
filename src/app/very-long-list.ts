@@ -1,4 +1,4 @@
-import { throttledWithAbort } from "./throttled-with-abort";
+import { debounceWithAbort } from "./debounce-with-abort";
 import type { VeryLongListData, VeryLongListItems } from "./very-long-list-data";
 import './very-long-list-scrollbar'
 import type { ScrollRequestedEvent, VeryLongListScrollbar } from "./very-long-list-scrollbar";
@@ -78,19 +78,27 @@ function waitMs(ms: number): Promise<void> {
     return new Promise(res => setTimeout(res, ms))
 }
 
-function debounce(fn: () => Promise<void>, interval: number): () => void {
+function throttle(fn: (abortSignal?: AbortSignal) => Promise<void>, interval: number): (abortSignal?: AbortSignal) => void {
     let busy = false;
     let scheduled = false;
-    return execute;
+    let latestAbortSignal: AbortSignal | undefined
+    return (abortSignal?: AbortSignal) => {
+        latestAbortSignal = abortSignal;
+        execute();
+    };
     async function execute(): Promise<void> {
         if(busy){
             scheduled = true;
             return;
         }
+        if(latestAbortSignal?.aborted){
+            latestAbortSignal = undefined;
+            return;
+        }
         scheduled = false;
         busy = true;
         await Promise.all([
-            fn(),
+            fn(latestAbortSignal),
             waitMs(interval)
         ])
         busy = false;
@@ -155,7 +163,7 @@ class DisplayedVeryLongListData<TItem = unknown, TDisplayedItem = unknown> {
     private displayedItems: DisplayedItemData<TItem, TDisplayedItem>[] = [];
     private lastInitialDisplayedIndex = -1;
     private initialItems: VeryLongListItems<TItem>
-    private debouncedDisplay = debounce(() => this.display(), 100);
+    private throttledDisplay = throttle((abortSignal) => this.display(abortSignal), 100);
     private constructor(
         private readonly data: VeryLongListData<TItem>,
         private readonly contentDisplay: VeryLongListContentDisplay<TItem, TDisplayedItem>
@@ -170,12 +178,12 @@ class DisplayedVeryLongListData<TItem = unknown, TDisplayedItem = unknown> {
     }
     setHeight(height: number, abortSignal?: AbortSignal): void {
         this.displayHeight = height;
-        this.display(abortSignal);
+        this.throttledDisplay(abortSignal);
     }
     setScrollTop(scrollTop: number): void {
         this.scrollTop = scrollTop;
         this.setScrolledRatio();
-        this.debouncedDisplay();
+        this.throttledDisplay();
     }
     getScrollTopAtRelativePosition(relativePosition: number): number | undefined {
         const firstItemRelativePosition = this.firstItemRelativePosition;
@@ -251,6 +259,7 @@ class DisplayedVeryLongListData<TItem = unknown, TDisplayedItem = unknown> {
         if(this.displayHeightRatio === Infinity){
             this.displayHeightRatio = await this.calculateDisplayHeightRatio();
             this.eventTarget.dispatchEvent(new CustomEvent('displayheightratiochanged', {detail: {displayHeightRatio: this.displayHeightRatio}}))
+            this.setScrolledRatio()
         }
     }
     private async displayItemsBelow(nrItems: number, abortSignal?: AbortSignal): Promise<void> {
@@ -463,7 +472,7 @@ class ConnectedVeryLongList {
     private readonly resizeObserver: ResizeObserver;
     private readonly scrollRequestedListener: (ev: ScrollRequestedEvent) => void
     private readonly containerElementScroller: ElementScroller;
-    private throttledSetDataHeight = throttledWithAbort((abortSignal) => this.setDisplayedDataHeight(abortSignal), 300)
+    private debouncedSetDataHeight = debounceWithAbort((abortSignal) => this.setDisplayedDataHeight(abortSignal), 300)
     constructor(
         public readonly containerElement: HTMLElement,
         public readonly contentElement: HTMLElement,
@@ -559,7 +568,7 @@ class ConnectedVeryLongList {
 
     private handleResize([{contentRect: {height}}]: ResizeObserverEntry[]): void {
         this.height = height;
-        this.throttledSetDataHeight();
+        this.debouncedSetDataHeight();
     }
 
     static create(
