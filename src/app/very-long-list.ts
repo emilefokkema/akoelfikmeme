@@ -1,122 +1,10 @@
-import { debounceWithAbort } from "./debounce-with-abort";
+import { ElementScroller } from "./element-scroller";
+import { debounceWithAbort, throttle, waitForAnimationFrameWhen } from "./utils";
 import type { VeryLongListData, VeryLongListItems } from "./very-long-list-data";
 import './very-long-list-scrollbar'
+import './very-long-list-item'
 import type { ScrollRequestedEvent, VeryLongListScrollbar } from "./very-long-list-scrollbar";
-
-class ElementScroller {
-    private readonly scrollListener: () => void
-    private onDidScroll: (() => void) | undefined;
-    constructor(private readonly element: Element){
-        this.scrollListener = () => this.handleScroll();
-        element.addEventListener('scroll', this.scrollListener);
-    }
-    destroy(): void {
-        this.element.removeEventListener('scroll', this.scrollListener);
-    }
-    async scrollTo(scrollTop: number): Promise<void> {
-        let nrOfAttempts = 0;
-        while(nrOfAttempts < 5){
-            const actual = this.element.scrollTop;
-            if(Math.abs(actual - scrollTop) < 3){
-                return;
-            }
-            const scrollPromise = this.whenScrolled();
-            this.element.scrollTop = scrollTop;
-            await Promise.race([
-                scrollPromise,
-                waitMs(10)
-            ])
-            nrOfAttempts++;
-        }
-        throw new Error('Could not scroll the element')
-    }
-    private whenScrolled(): Promise<void> {
-        return new Promise((res) => {
-            this.onDidScroll = res;
-        })
-    }
-    private handleScroll(): void {
-        if(this.onDidScroll){
-            this.onDidScroll();
-            this.onDidScroll = undefined;
-        }
-    }
-}
-
-function waitForAnimationFrameWhen<T>(
-    calculate: () => T,
-    predicate: (v: T) => boolean,
-    maxRetries: number,
-    abortSignal?: AbortSignal
-): Promise<T> {
-    return new Promise<T>((res) => {
-        let triesLeft = maxRetries;
-        let requestedAnimationFrame: number | undefined;
-        abortSignal?.addEventListener('abort', () => {
-            if(requestedAnimationFrame !== undefined){
-                cancelAnimationFrame(requestedAnimationFrame);
-            }
-        })
-        check();
-        function check(): void {
-            const value = calculate();
-            if(predicate(value)){
-                res(value);
-                return;
-            }
-            triesLeft--;
-            if(triesLeft === 0 || abortSignal?.aborted){
-                res(value);
-                return;
-            }
-            requestedAnimationFrame = requestAnimationFrame(check);
-        }
-    })
-}
-
-function waitMs(ms: number): Promise<void> {
-    return new Promise(res => setTimeout(res, ms))
-}
-
-function throttle(fn: (abortSignal?: AbortSignal) => Promise<void>, interval: number): (abortSignal?: AbortSignal) => void {
-    let busy = false;
-    let scheduled = false;
-    let latestAbortSignal: AbortSignal | undefined
-    return (abortSignal?: AbortSignal) => {
-        latestAbortSignal = abortSignal;
-        execute();
-    };
-    async function execute(): Promise<void> {
-        if(busy){
-            scheduled = true;
-            return;
-        }
-        if(latestAbortSignal?.aborted){
-            latestAbortSignal = undefined;
-            return;
-        }
-        scheduled = false;
-        busy = true;
-        await Promise.all([
-            fn(latestAbortSignal),
-            waitMs(interval)
-        ])
-        busy = false;
-        if(scheduled){
-            execute();
-        }
-    }
-}
-
-class VeryLongListItem extends HTMLElement {
-    
-    connectedCallback(): void {
-        const templateEl = document.getElementById('very-long-list-item-template') as HTMLTemplateElement;
-        const content = templateEl.content.cloneNode(true);
-        const shadow = this.attachShadow({mode: 'open'});
-        shadow.appendChild(content);
-    }
-}
+import type { VeryLongListItem } from "./very-long-list-item";
 
 
 interface DisplayedItem<TItem, TDisplayedItem> {
@@ -614,11 +502,9 @@ export class VeryLongList extends HTMLElement {
 }
 
 customElements.define('very-long-list', VeryLongList);
-customElements.define('very-long-list-item', VeryLongListItem);
 
 declare global {
     interface HTMLElementTagNameMap {
         'very-long-list': VeryLongList
-        'very-long-list-item': VeryLongListItem
     }
 }
