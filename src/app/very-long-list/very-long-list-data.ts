@@ -4,10 +4,15 @@ export interface VeryLongListItems<TItem = unknown> {
     hasNext: boolean
 }
 
+export interface VeryLongListTotal<TItem = unknown> {
+    getRelativePositionOfItem(item: TItem, abortSignal?: AbortSignal): Promise<number>
+    getItemsAtRelativePosition(position: number, nrOfItems: number, abortSignal?: AbortSignal): Promise<VeryLongListItems<TItem>>
+}
+
 export interface VeryLongListData<TItem = unknown> {
     items: VeryLongListItems<TItem>
+    total: VeryLongListTotal<TItem> | undefined
     getItemsAfterItem(item: TItem, nrOfItems: number, abortSignal?: AbortSignal): Promise<VeryLongListItems<TItem>>
     getItemsBeforeItem(item: TItem, nrOfItems: number, abortSignal?: AbortSignal): Promise<VeryLongListItems<TItem>>
     renderItem(item: TItem): Element
-    getRelativePositionOfItem(item: TItem, abortSignal?: AbortSignal): Promise<number>
 }

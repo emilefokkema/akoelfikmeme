@@ -11,7 +11,8 @@
         "skipLibCheck": true,
     },
     "references": [
-        {"path": "../src/permutator"}
+        {"path": "../src/permutator"},
+        {"path": "../src/worker"}
     ],
     "include": ["**/*"]
 }

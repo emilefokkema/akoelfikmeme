@@ -12,11 +12,16 @@ export interface ContinuationRequest {
     item: AnagramListItem,
     maxItems: number
 }
+export interface ItemsAtRelativePositionRequest {
+    relativePosition: number
+    maxItems: number
+}
 
 export interface AnagramListClient {
     setElements(elements: AnagramElements): void
-    getItems(): AnagramListItemData | undefined
+    getItems(): AnagramListItemData
     getItemsAfterItem(request: ContinuationRequest): AnagramListItemData
     getItemsBeforeItem(request: ContinuationRequest): AnagramListItemData
     getRelativePositionOfItem(item: AnagramListItem): number
+    getItemsAtRelativePosition(request: ItemsAtRelativePositionRequest): AnagramListItemData
 }

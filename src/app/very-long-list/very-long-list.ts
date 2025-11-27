@@ -141,7 +141,10 @@ class DisplayedVeryLongListData<TItem = unknown, TDisplayedItem = unknown> {
             await this.displayItemsAbove(nrOfItemsToAddAbove, abortSignal);
         }
         if(heightToAddAbove !== 0){
-            this.firstItemRelativePosition = await this.data.getRelativePositionOfItem(this.displayedItems[0].item);
+            if(this.data.total){
+                this.firstItemRelativePosition = await this.data.total.getRelativePositionOfItem(this.displayedItems[0].item);
+            }
+            
             this.setScrolledRatio()
         }
         if(this.displayHeightRatio === Infinity){
@@ -263,24 +266,28 @@ class DisplayedVeryLongListData<TItem = unknown, TDisplayedItem = unknown> {
         if(firstItemRelativePosition === undefined){
             return Infinity;
         }
+        const total = this.data.total;
+        if(!total){
+            return Infinity;
+        }
         const itemsHeight = this.itemHeight * nrOfItems;
         if(nrOfItems === 1){
             const firstItem = this.displayedItems[0];
             if(firstItem.hasNext){
                 const { items: [secondItem] } = await this.data.getItemsAfterItem(firstItem.item, 1, abortSignal);
-                const posSecond = await this.data.getRelativePositionOfItem(secondItem, abortSignal);
+                const posSecond = await total.getRelativePositionOfItem(secondItem, abortSignal);
                 const itemsRatio = posSecond - firstItemRelativePosition;
                 return itemsRatio * this.displayHeight / itemsHeight;
             }
             if(firstItem.hasPrevious){
                 const { items: [itemBeforeFirst] } = await this.data.getItemsBeforeItem(firstItem.item, 1, abortSignal);
-                const posBeforeFirst = await this.data.getRelativePositionOfItem(itemBeforeFirst, abortSignal);
+                const posBeforeFirst = await total.getRelativePositionOfItem(itemBeforeFirst, abortSignal);
                 const itemsRatio = firstItemRelativePosition - posBeforeFirst;
                 return itemsRatio * this.displayHeight / itemsHeight;
             }
             return this.displayHeight / itemsHeight;
         }
-        const posLast = await this.data.getRelativePositionOfItem(this.displayedItems[nrOfItems - 1].item, abortSignal);
+        const posLast = await total.getRelativePositionOfItem(this.displayedItems[nrOfItems - 1].item, abortSignal);
         const itemsRatio = (posLast - firstItemRelativePosition) * nrOfItems / (nrOfItems - 1);
         return itemsRatio * this.displayHeight / itemsHeight;
     }

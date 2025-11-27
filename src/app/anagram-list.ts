@@ -5,7 +5,7 @@ import { createWorkerRequests } from "./worker-requests"
 
 export interface AnagramList {
     setElements(elements: AnagramElements, abortSignal: AbortSignal): Promise<void>
-    getListData(abortSignal: AbortSignal): Promise<VeryLongListData<AnagramListItem> | undefined>
+    getListData(abortSignal: AbortSignal): Promise<VeryLongListData<AnagramListItem>>
 }
 
 export function createAnagramList(): AnagramList {
@@ -17,7 +17,8 @@ export function createAnagramList(): AnagramList {
         getItems: true,
         getItemsAfterItem: true,
         getItemsBeforeItem: true,
-        getRelativePositionOfItem: true
+        getRelativePositionOfItem: true,
+        getItemsAtRelativePosition: true
     });
     return {
         setElements(elements, abortSignal) {
@@ -25,11 +26,16 @@ export function createAnagramList(): AnagramList {
         },
         async getListData(abortSignal) {
             const data = await client.getItems(undefined, abortSignal);
-            if(!data){
-                return undefined;
-            }
             return {
                 items: data,
+                total: {
+                    getRelativePositionOfItem(item, abortSignal2) {
+                        return client.getRelativePositionOfItem(item, abortSignal2)
+                    },
+                    getItemsAtRelativePosition(position: number, nrOfItems: number, abortSignal?: AbortSignal){
+                        return client.getItemsAtRelativePosition({ relativePosition: position, maxItems: nrOfItems}, abortSignal)
+                    }
+                },
                 getItemsAfterItem(item, maxItems, abortSignal2) {
                     return client.getItemsAfterItem({item, maxItems}, abortSignal2)
                 },
@@ -40,10 +46,7 @@ export function createAnagramList(): AnagramList {
                     const span = document.createElement('span');
                     span.textContent = item.elements.join('');
                     return span;
-                },
-                getRelativePositionOfItem(item, abortSignal2) {
-                    return client.getRelativePositionOfItem(item, abortSignal2)
-                },
+                }
             };
         },
     }
