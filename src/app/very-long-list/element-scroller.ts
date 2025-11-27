@@ -1,4 +1,4 @@
-import { waitMs } from "./utils";
+import { waitMs } from "../utils";
 
 export class ElementScroller {
     private readonly scrollListener: () => void

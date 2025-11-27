@@ -1,5 +1,5 @@
 import { ElementScroller } from "./element-scroller";
-import { debounceWithAbort, throttle, waitForAnimationFrameWhen } from "./utils";
+import { debounceWithAbort, throttle, waitForAnimationFrameWhen } from "../utils";
 import type { VeryLongListData, VeryLongListItems } from "./very-long-list-data";
 import './very-long-list-scrollbar'
 import './very-long-list-item'

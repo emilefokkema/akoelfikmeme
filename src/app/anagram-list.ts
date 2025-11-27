@@ -1,6 +1,6 @@
 import type { AnagramElements, AnagramListClient, AnagramListItem } from "../shared/anagram-list-messages";
 import { createRequestResponseClient } from "./request-response-client";
-import type { VeryLongListData } from "./very-long-list-data"
+import type { VeryLongListData } from "./very-long-list/very-long-list-data"
 import { createWorkerRequests } from "./worker-requests"
 
 export interface AnagramList {
