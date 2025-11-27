@@ -1,5 +1,5 @@
 import { createAnagramList } from './anagram-list';
-import './very-long-list';
+import './very-long-list/very-long-list';
 import './anagram-input';
 import { debounceWithAbort } from './utils';
 
