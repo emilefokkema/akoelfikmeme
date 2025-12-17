@@ -25,7 +25,7 @@ export function createAnagramList(): AnagramList {
             return client.setElements(elements, abortSignal);
         },
         async getListData(abortSignal) {
-            const data = await client.getItems(undefined, abortSignal);
+            const data = await client.getItems({ maxItems: 1 }, abortSignal);
             return {
                 items: data,
                 total: {

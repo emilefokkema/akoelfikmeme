@@ -14,16 +14,14 @@ describe('anagram list', () => {
         let items: AnagramListItemData
 
         beforeEach(() => {
-            items = anagramList.getItems();
+            items = anagramList.getItems({ maxItems: 1});
         })
 
         it('should get items', () => {
             const { items: itemList, hasNext, hasPrevious } = items;
             expect(hasPrevious).toBe(false)
             expect(hasNext).toBe(true)
-            expect(itemList).toEqual([expect.objectContaining({
-                elements: ["a", "n", "a", "g", "r", "a", "m"]
-            })])
+            expect(itemList.map(i => i.elements)).toMatchSnapshot();
         })
 
         describe('and then gets items after item', () => {
@@ -36,23 +34,7 @@ describe('anagram list', () => {
 
             it('should get items after item', () => {
                 const { items: nextItemList} = nextItems
-                expect(nextItemList).toEqual([
-                    expect.objectContaining({
-                        elements: ["a", "n", "a", "g", "r", "m", "a"]
-                    }),
-                    expect.objectContaining({
-                        elements: ["a", "n", "a", "g", "a", "r", "m"]
-                    }),
-                    expect.objectContaining({
-                        elements: ["a", "n", "a", "g", "a", "m", "r"]
-                    }),
-                    expect.objectContaining({
-                        elements: ["a", "n", "a", "g", "m", "r", "a"]
-                    }),
-                    expect.objectContaining({
-                        elements: ["a", "n", "a", "g", "m", "a", "r"]
-                    }),
-                ])
+                expect(nextItemList.map(i => i.elements)).toMatchSnapshot();
             })
 
             describe('and then gets items before item', () => {
@@ -65,23 +47,24 @@ describe('anagram list', () => {
 
                 it('should get items before item', () => {
                     const { items: prevousItemList } = previousItems;
-                    expect(prevousItemList).toEqual([
-                        expect.objectContaining({
-                            elements: ["a", "n", "a", "g", "a", "r", "m"]
-                        }),
-                        expect.objectContaining({
-                            elements: ["a", "n", "a", "g", "a", "m", "r"]
-                        }),
-                        expect.objectContaining({
-                            elements: ["a", "n", "a", "g", "m", "r", "a"]
-                        }),
-                    ])
+                    expect(prevousItemList.map(i => i.elements)).toMatchSnapshot();
                 })
             })
         })
     })
 
     describe('that gets items at relative position', () => {
-        
+        let items: AnagramListItemData
+
+        beforeEach(() => {
+            items = anagramList.getItemsAtRelativePosition({ relativePosition: .5, maxItems: 5});
+        })
+
+        it('should get items', () => {
+            const { items: itemList, hasNext, hasPrevious } = items;
+            expect(hasPrevious).toBe(true)
+            expect(hasNext).toBe(true)
+            expect(itemList.map(i => i.elements)).toMatchSnapshot();
+        })
     })
 })

@@ -1,4 +1,4 @@
-import type { AnagramElements, AnagramListClient, AnagramListItem, AnagramListItemData, ContinuationRequest, ItemsAtRelativePositionRequest } from "../shared/anagram-list-messages";
+import type { AnagramElements, AnagramListClient, AnagramListItem, AnagramListItemData, ContinuationRequest, ItemsAtRelativePositionRequest, ItemsRequest } from "../shared/anagram-list-messages";
 import { PermutationList, type Permutation, type PermutationValue } from "../permutator/permutation-list"
 
 interface ElementsPermutation {
@@ -49,7 +49,7 @@ export class AnagramList implements AnagramListClient {
         this.elementMap = elementMap;
         this.initialPermutation = permutationValue;
     }
-    public getItems(): AnagramListItemData {
+    public getItems({ maxItems }: ItemsRequest): AnagramListItemData {
         if(!this.initialPermutation || !this.permutationList || !this.elementMap){
             return empty;
         }
@@ -57,19 +57,8 @@ export class AnagramList implements AnagramListClient {
         if(!perm){
             return empty;
         }
-        const elementMap = this.elementMap;
-        const nextPerm = perm.next();
-        const previousPerm = perm.previous();
-        return {
-            items: [
-                {
-                    elements: perm.value.map(e => elementMap.get(e)!),
-                    permutation: perm.value
-                }
-            ],
-            hasNext: !!nextPerm,
-            hasPrevious: !!previousPerm
-        }
+
+        return this.getItemsFromPermutation(perm, maxItems);
     }
     public getItemsAtRelativePosition({ relativePosition, maxItems }: ItemsAtRelativePositionRequest){
         if(!this.permutationList){
@@ -89,7 +78,11 @@ export class AnagramList implements AnagramListClient {
         if(!permutation){
             return empty;
         }
-        return this.getItemsFromPermutation(permutation, maxItems);
+        const next = permutation.next();
+        if(!next){
+            return empty;
+        }
+        return this.getItemsFromPermutation(next, maxItems);
     }
     public getItemsBeforeItem({item, maxItems}: ContinuationRequest): AnagramListItemData {
         if(!this.permutationList || !this.elementMap){
@@ -144,15 +137,22 @@ export class AnagramList implements AnagramListClient {
         const resultingItems: AnagramListItem[] = [];
         const elementMap = this.elementMap;
         while(true){
-            nextPermutation = currentPermutation.next();
-            if(numberOfItemsFound >= maxItems || !nextPermutation){
+            if(numberOfItemsFound >= maxItems){
                 break;
             }
+            // nextPermutation = currentPermutation.next();
+            // if(numberOfItemsFound >= maxItems || !nextPermutation){
+            //     break;
+            // }
             resultingItems.push({
-                permutation: nextPermutation.value,
-                elements: nextPermutation.value.map(e => elementMap.get(e)!)
+                permutation: currentPermutation.value,
+                elements: currentPermutation.value.map(e => elementMap.get(e)!)
             });
             numberOfItemsFound++;
+            nextPermutation = currentPermutation.next();
+            if(!nextPermutation){
+                break;
+            }
             currentPermutation = nextPermutation;
         }
         return {
