@@ -90,7 +90,7 @@ class ConnectedVeryLongList {
         this.resizeObserver = resizeObserver;
     }
 
-    async displayData(data: VeryLongListData | undefined, abortSignal: AbortSignal): Promise<void> {
+    displayData(data: VeryLongListData | undefined, abortSignal: AbortSignal): void {
         if(this.displayedData){
             this.displayedData.destroy();
             this.displayedData = undefined;
@@ -99,7 +99,7 @@ class ConnectedVeryLongList {
             this.scrollbar.visible = false;
             return;
         }
-        this.displayedData = await DisplayedData.create<unknown, VeryLongListItem>(
+        this.displayedData = DisplayedData.create<unknown, VeryLongListItem>(
             data,
             new ContentDisplayImpl(
                 this.containerElement,
@@ -203,11 +203,11 @@ export class VeryLongList extends HTMLElement {
         }
     }
 
-    public async setData(data: VeryLongListData | undefined, abortSignal: AbortSignal): Promise<void>{
+    public setData(data: VeryLongListData | undefined, abortSignal: AbortSignal): void {
         if(!this.connectedList){
             return;
         }
-        await this.connectedList.displayData(data, abortSignal);
+        this.connectedList.displayData(data, abortSignal);
     }
 }
 

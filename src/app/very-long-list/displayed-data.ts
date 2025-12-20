@@ -274,15 +274,15 @@ export class DisplayedData<TItem = unknown, TDisplayedItem = unknown> {
         return itemsRatio * this.displayHeight / itemsHeight;
     }
 
-    static async create<TItem = unknown, TDisplayedItem = unknown>(
+    static create<TItem = unknown, TDisplayedItem = unknown>(
         data: VeryLongListData<TItem>,
         contentDisplay: ContentDisplay<TItem, TDisplayedItem>,
         displayHeight: number | undefined,
         abortSignal: AbortSignal
-    ): Promise<DisplayedData<TItem, TDisplayedItem>> {
+    ): DisplayedData<TItem, TDisplayedItem> {
         const result = new DisplayedData(data, contentDisplay);
         if(displayHeight !== undefined){
-            await result.setHeight(displayHeight, abortSignal);
+            result.setHeight(displayHeight, abortSignal);
         }
         return result;
     }
