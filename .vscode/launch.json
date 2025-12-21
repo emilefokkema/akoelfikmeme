@@ -6,6 +6,7 @@
     "configurations": [
         {
             "type": "node",
+            "runtimeVersion": "22",
             "request": "launch",
             "name": "Debug test",
             "autoAttachChildProcesses": true,
