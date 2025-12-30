@@ -12,7 +12,8 @@
     },
     "references": [
         {"path": "../src/permutator"},
-        {"path": "../src/worker"}
+        {"path": "../src/worker"},
+        {"path": "../src/app"}
     ],
     "include": ["**/*"]
 }
