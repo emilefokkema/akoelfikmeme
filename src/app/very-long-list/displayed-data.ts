@@ -50,6 +50,17 @@ export class DisplayedData<TItem = unknown, TDisplayedItem = unknown> {
         this.displayHeight = height;
         this.throttledDisplay(abortSignal);
     }
+    async scrollToPosition(relativePosition: number, abortSignal?: AbortSignal): Promise<void> {
+        if(!this.data.total || this.displayHeight === 0 || this.itemHeight === 0){
+            return;
+        }
+        const numberOfItems = Math.ceil(this.displayHeight / this.itemHeight);
+        const newItems = await this.data.total.getItemsAtRelativePosition(relativePosition, numberOfItems, abortSignal);
+        this.destroy();
+        this.initialItems = newItems;
+        this.lastInitialDisplayedIndex = -1;
+        this.display(abortSignal);
+    }
     setScrollTop(scrollTop: number): void {
         this.scrollTop = scrollTop;
         this.setScrolledRatio();
@@ -232,7 +243,7 @@ export class DisplayedData<TItem = unknown, TDisplayedItem = unknown> {
     }
     private setScrolledRatio(): void {
         const firstItemRelativePosition = this.firstItemRelativePosition;
-        if(firstItemRelativePosition === undefined){
+        if(firstItemRelativePosition === undefined || this.displayHeightRatio === Infinity){
             return;
         }
         const newScrolledRatio = firstItemRelativePosition + this.displayHeightRatio * this.scrollTop / this.displayHeight;

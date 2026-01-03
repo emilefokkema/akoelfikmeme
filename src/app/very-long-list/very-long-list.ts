@@ -139,7 +139,7 @@ class ConnectedVeryLongList {
         }
         const scrollTop = this.displayedData.getScrollTopAtRelativePosition(ratio);
         if(scrollTop === undefined){
-            console.log('cannot scroll there');
+            this.displayedData.scrollToPosition(ratio);
             return;
         }
         this.containerElementScroller.scrollTo(scrollTop)
