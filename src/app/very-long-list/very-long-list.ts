@@ -490,6 +490,7 @@ export class VeryLongList extends HTMLElement {
     protected disconnectedCallback(){
         if(this.connectedList){
             this.connectedList.destroy();
+            this.connectedList = undefined;
         }
     }
 
