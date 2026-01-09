@@ -1,4 +1,4 @@
-import { throttle } from "../utils";
+import { createQueuedLockManager, throttle } from "../utils";
 import type { ContentDisplay, DisplayedItem } from "./content-display";
 import type { VeryLongListData, VeryLongListItems } from "./very-long-list-data";
 
@@ -34,6 +34,7 @@ export class DisplayedData<TItem = unknown, TDisplayedItem = unknown> {
     private lastInitialDisplayedIndex = -1;
     private initialItems: VeryLongListItems<TItem>
     private throttledDisplay = throttle((abortSignal) => this.display(abortSignal), 100);
+    private displayLockManager = createQueuedLockManager();
     private constructor(
         private readonly data: VeryLongListData<TItem>,
         private readonly contentDisplay: ContentDisplay<TItem, TDisplayedItem>
@@ -51,15 +52,21 @@ export class DisplayedData<TItem = unknown, TDisplayedItem = unknown> {
         this.throttledDisplay(abortSignal);
     }
     async scrollToPosition(relativePosition: number, abortSignal?: AbortSignal): Promise<void> {
+        const lock = await this.displayLockManager.acquire(abortSignal);
+        abortSignal?.addEventListener('abort', () => lock.release());
         if(!this.data.total || this.displayHeight === 0 || this.itemHeight === 0){
             return;
         }
         const numberOfItems = Math.ceil(this.displayHeight / this.itemHeight);
         const newItems = await this.data.total.getItemsAtRelativePosition(relativePosition, numberOfItems, abortSignal);
+        if(abortSignal?.aborted){
+            return;
+        }
         this.destroy();
         this.initialItems = newItems;
         this.lastInitialDisplayedIndex = -1;
-        this.display(abortSignal);
+        await this.lockedDisplay(abortSignal);
+        lock.release();
     }
     setScrollTop(scrollTop: number): void {
         this.scrollTop = scrollTop;
@@ -90,6 +97,12 @@ export class DisplayedData<TItem = unknown, TDisplayedItem = unknown> {
         this.eventTarget.removeEventListener(type, listener as () => void)
     }
     private async display(abortSignal?: AbortSignal): Promise<void> {
+        const lock = await this.displayLockManager.acquire(abortSignal);
+        abortSignal?.addEventListener('abort', () => lock.release());
+        await this.lockedDisplay(abortSignal);
+        lock.release();
+    }
+    private async lockedDisplay(abortSignal?: AbortSignal): Promise<void> {
         if(this.displayHeight <= 0 || this.initialItems.items.length === 0){
             return;
         }
