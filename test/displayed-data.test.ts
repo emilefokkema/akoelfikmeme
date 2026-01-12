@@ -217,11 +217,56 @@ describe('displayed data', () => {
             expectedScrolledRatio += scrollTopDifference * scrollRatio
         }
     })
+
+    it('should scroll to position', async () => {
+        const totalNumberOfItems = 10 ** 4;
+        const itemHeight = 10;
+        const numbers = createNumbersForVeryLongList({
+            numberOfItems: totalNumberOfItems,
+            initialNumberOfItems: 1
+        });
+        const display = createNumberDisplay();
+        numbers.getRelativePositionOfItemMock.resolveAllCalls((item: number) => numbers.getRelativePositionOfItem(item));
+        numbers.getItemsBeforeItemMock.resolveAllCalls((item, numberOfItems) => numbers.getItemsBeforeItem(item, numberOfItems))
+        numbers.getItemsAfterItemMock.resolveAllCalls((item, numberOfItems) => numbers.getItemsAfterItem(item, numberOfItems));
+        numbers.getItemsAtRelativePositionMock.resolveAllCalls((position, numberOfItems) => numbers.getItemsAtRelativePosition(position, numberOfItems))
+        display.getDisplayedHeightMock.resolveAllCalls(() => itemHeight);
+
+        let latestScrolledRatio: ScrolledRatioChangedEvent['detail'] | undefined;
+
+        const abortController = new AbortController();
+        const displayedData = DisplayedData.create(
+            numbers.data,
+            display.contentDisplay,
+            100,
+            abortController.signal
+        );
+
+        displayedData.addEventListener('scrolledratiochanged', ({ detail }) => latestScrolledRatio = detail);
+
+        await expect.poll(() => display.displayedItems).toEqual(numberSequence(0, 29));
+
+        const positionToScrollTo = .5;
+        const numberOfItemsDisplayedAboveScrollTop = 20;
+
+        await displayedData.scrollToPosition(positionToScrollTo);
+
+        expect(display.displayedItems).toEqual(numberSequence(5000 - numberOfItemsDisplayedAboveScrollTop, 5029));
+
+        // a 'wrong' scrolled ratio should have been emitted
+        expect(latestScrolledRatio).toEqual({ scrolledRatio: positionToScrollTo - numberOfItemsDisplayedAboveScrollTop * 1 / totalNumberOfItems });
+
+        // because the items have been added to the top,
+        // a new scroll top is set
+        displayedData.setScrollTop(itemHeight * numberOfItemsDisplayedAboveScrollTop);
+
+        await expect.poll(() => latestScrolledRatio).toEqual({ scrolledRatio: positionToScrollTo })
+    })
 })
 
-function createNumbersForVeryLongList({ numberOfItems, initialNumberOfItems }: NumbersForVeryLongListInit): NumbersForVeryLongList {
+function createNumbersForVeryLongList({ numberOfItems: totalNumberOfItems, initialNumberOfItems }: NumbersForVeryLongListInit): NumbersForVeryLongList {
     const items = numberSequence(0, initialNumberOfItems - 1);
-    const lastItem = numberOfItems - 1;
+    const lastItem = totalNumberOfItems - 1;
     const getRelativePositionOfItemMock: AsyncFn<[number], number> = asyncFn();
     const getItemsAtRelativePositionMock: AsyncFn<[number, number], VeryLongListItems<number>> = asyncFn();
     const getItemsAfterItemMock: AsyncFn<[number, number], VeryLongListItems<number>> = asyncFn();
@@ -231,6 +276,7 @@ function createNumbersForVeryLongList({ numberOfItems, initialNumberOfItems }: N
         getRelativePositionOfItemMock,
         getRelativePositionOfItem,
         getItemsAtRelativePositionMock,
+        getItemsAtRelativePosition,
         getItemsAfterItemMock,
         getItemsAfterItem,
         getItemsBeforeItemMock,
@@ -253,7 +299,7 @@ function createNumbersForVeryLongList({ numberOfItems, initialNumberOfItems }: N
 
 
     function getRelativePositionOfItem(item: number): number {
-        return item / (lastItem + 1);
+        return item / totalNumberOfItems;
     }
 
     function getItemsAfterItem(item: number, numerOfItems: number): VeryLongListItems<number> {
@@ -269,6 +315,14 @@ function createNumbersForVeryLongList({ numberOfItems, initialNumberOfItems }: N
         const last = item - 1;
         const hasPrevious = first > 0;
         const hasNext = true;
+        return { items: numberSequence(first, last), hasPrevious, hasNext }
+    }
+
+    function getItemsAtRelativePosition(position: number, numberOfItems: number): VeryLongListItems<number> {
+        const first = Math.floor(totalNumberOfItems * position);
+        const last = Math.min(first + numberOfItems - 1, lastItem);
+        const hasPrevious = first > 0;
+        const hasNext = last < lastItem;
         return { items: numberSequence(first, last), hasPrevious, hasNext }
     }
 }
@@ -335,6 +389,7 @@ interface NumbersForVeryLongList {
     getRelativePositionOfItemMock: AsyncFn<[number], number>
     getRelativePositionOfItem(item: number): number
     getItemsAtRelativePositionMock: AsyncFn<[number, number], VeryLongListItems<number>>
+    getItemsAtRelativePosition(position: number, nrOfItems: number): VeryLongListItems<number>
     getItemsAfterItemMock: AsyncFn<[number, number], VeryLongListItems<number>>
     getItemsAfterItem(item: number, numerOfItems: number): VeryLongListItems<number>
     getItemsBeforeItemMock: AsyncFn<[number, number], VeryLongListItems<number>>
