@@ -80,3 +80,54 @@ export function throttle(fn: (abortSignal?: AbortSignal) => Promise<void>, inter
         }
     }
 }
+
+export interface QueuedLock {
+    release(): void
+}
+export interface QueuedLockManager {
+    acquire(abortSignal?: AbortSignal): Promise<QueuedLock>
+}
+
+interface QueuedLockRequest {
+    resolve(lock: QueuedLock): void
+}
+export function createQueuedLockManager(): QueuedLockManager {
+    let acquired = false;
+    const requests: QueuedLockRequest[] = [];
+    return { acquire }
+    function acquire(abortSignal?: AbortSignal): Promise<QueuedLock> {
+        const { promise, resolve } = Promise.withResolvers<QueuedLock>();
+        const request: QueuedLockRequest = { resolve };
+        requests.unshift(request);
+        abortSignal?.addEventListener('abort', () => abortRequest(request));
+        release();
+        return promise;
+    }
+    function abortRequest(request: QueuedLockRequest): void {
+        const index = requests.indexOf(request);
+        if(index === -1){
+            return;
+        }
+        requests.splice(index, 1);
+    }
+    function release(): void {
+        if(acquired){
+            return;
+        }
+        const request = requests.pop();
+        if(!request){
+            return;
+        }
+        acquired = true;
+        let released = false;
+        request.resolve({ release: releaseAcquired })
+        function releaseAcquired(): void {
+            if(released){
+                return;
+            }
+            acquired = false;
+            released = true;
+            release();
+        }
+    }
+}

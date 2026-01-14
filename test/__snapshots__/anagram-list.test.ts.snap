@@ -1,0 +1,147 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`anagram list > that gets items > and then gets items after item > and then gets items before item > should get items before item 1`] = `
+[
+  [
+    "a",
+    "n",
+    "a",
+    "g",
+    "a",
+    "r",
+    "m",
+  ],
+  [
+    "a",
+    "n",
+    "a",
+    "g",
+    "a",
+    "m",
+    "r",
+  ],
+  [
+    "a",
+    "n",
+    "a",
+    "g",
+    "m",
+    "r",
+    "a",
+  ],
+]
+`;
+
+exports[`anagram list > that gets items > and then gets items after item > should get items after item 1`] = `
+[
+  [
+    "a",
+    "n",
+    "a",
+    "g",
+    "r",
+    "m",
+    "a",
+  ],
+  [
+    "a",
+    "n",
+    "a",
+    "g",
+    "a",
+    "r",
+    "m",
+  ],
+  [
+    "a",
+    "n",
+    "a",
+    "g",
+    "a",
+    "m",
+    "r",
+  ],
+  [
+    "a",
+    "n",
+    "a",
+    "g",
+    "m",
+    "r",
+    "a",
+  ],
+  [
+    "a",
+    "n",
+    "a",
+    "g",
+    "m",
+    "a",
+    "r",
+  ],
+]
+`;
+
+exports[`anagram list > that gets items > should get items 1`] = `
+[
+  [
+    "a",
+    "n",
+    "a",
+    "g",
+    "r",
+    "a",
+    "m",
+  ],
+]
+`;
+
+exports[`anagram list > that gets items at relative position > should get items 1`] = `
+[
+  [
+    "n",
+    "g",
+    "a",
+    "a",
+    "r",
+    "a",
+    "m",
+  ],
+  [
+    "n",
+    "g",
+    "a",
+    "a",
+    "r",
+    "m",
+    "a",
+  ],
+  [
+    "n",
+    "g",
+    "a",
+    "a",
+    "a",
+    "r",
+    "m",
+  ],
+  [
+    "n",
+    "g",
+    "a",
+    "a",
+    "a",
+    "m",
+    "r",
+  ],
+  [
+    "n",
+    "g",
+    "a",
+    "a",
+    "m",
+    "r",
+    "a",
+  ],
+]
+`;
