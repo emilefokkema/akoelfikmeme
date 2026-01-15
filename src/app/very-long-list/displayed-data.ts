@@ -49,6 +49,7 @@ export class DisplayedData<TItem = unknown, TDisplayedItem = unknown> {
     }
     setHeight(height: number, abortSignal?: AbortSignal): void {
         this.displayHeight = height;
+        this.displayHeightRatio = Infinity;
         this.throttledDisplay(abortSignal);
     }
     async scrollToPosition(relativePosition: number, abortSignal?: AbortSignal): Promise<void> {

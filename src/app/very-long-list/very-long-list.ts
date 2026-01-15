@@ -38,7 +38,9 @@ class ContentDisplayImpl<TItem> implements ContentDisplay<TItem, VeryLongListIte
             result.unshift({ item, displayed })
             elementToInsertBefore = displayed;
         }
-        await this.containerElementScroller.scrollTo(newScrollTop);
+        this.containerElementScroller.scrollTo(newScrollTop).catch((e) => {
+            console.warn(e)
+        });
         return result;
     }
 

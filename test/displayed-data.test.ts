@@ -262,6 +262,37 @@ describe('displayed data', () => {
 
         await expect.poll(() => latestScrolledRatio).toEqual({ scrolledRatio: positionToScrollTo })
     })
+
+    it('should emit displayheightratiochanged when height changes', async () => {
+        const numbers = createNumbersForVeryLongList({
+            numberOfItems: 10 ** 4,
+            initialNumberOfItems: 1
+        });
+        const display = createNumberDisplay();
+        numbers.getRelativePositionOfItemMock.resolveAllCalls((item: number) => numbers.getRelativePositionOfItem(item));
+        numbers.getItemsBeforeItemMock.resolveAllCalls((item, numberOfItems) => numbers.getItemsBeforeItem(item, numberOfItems))
+        numbers.getItemsAfterItemMock.resolveAllCalls((item, numberOfItems) => numbers.getItemsAfterItem(item, numberOfItems));
+        numbers.getItemsAtRelativePositionMock.resolveAllCalls((position, numberOfItems) => numbers.getItemsAtRelativePosition(position, numberOfItems))
+        display.getDisplayedHeightMock.resolveAllCalls(() => 10);
+
+        let latestDisplayHeightRatio: DisplayHeightRatioChangedEvent['detail'] | undefined
+
+        const abortController = new AbortController();
+        const displayedData = DisplayedData.create(
+            numbers.data,
+            display.contentDisplay,
+            100,
+            abortController.signal
+        );
+        displayedData.addEventListener('displayheightratiochanged', ({ detail }) => latestDisplayHeightRatio = detail);
+
+        await expect.poll(() => latestDisplayHeightRatio).toEqual({ displayHeightRatio: expect.closeTo(1 / (10 ** 3), 5)});
+
+        displayedData.setHeight(200);
+        vi.advanceTimersByTime(200);
+
+        await expect.poll(() => latestDisplayHeightRatio).toEqual({ displayHeightRatio: expect.closeTo(2 / (10 ** 3), 5)});
+    })
 })
 
 function createNumbersForVeryLongList({ numberOfItems: totalNumberOfItems, initialNumberOfItems }: NumbersForVeryLongListInit): NumbersForVeryLongList {
