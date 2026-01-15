@@ -5,7 +5,7 @@
 
 .track {
     width: 10px;
-    background-color: #f00;
+    background-color: rgba(0, 0, 0, .15);
     position: relative;
     height: 100%;
 }
@@ -27,7 +27,7 @@
 }
 #thumb {
     position: absolute;
-    background-color: #0f0;
+    background-color: rgba(0, 0, 0, .6);
     width: 100%;
 }
 
@@ -35,6 +35,6 @@
     position: absolute;
     width: 5px;
     height: 10px;
-    background-color: #00f;
+    background-color: rgba(0, 0, 0, .8);
     clip-path: polygon(0 100%, 100% 50%, 0 0)
 }

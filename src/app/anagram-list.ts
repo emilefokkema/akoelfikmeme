@@ -43,9 +43,9 @@ export function createAnagramList(): AnagramList {
                     return client.getItemsBeforeItem({item, maxItems}, abortSignal2)
                 },
                 renderItem(item) {
-                    const span = document.createElement('span');
-                    span.textContent = item.elements.join('');
-                    return span;
+                    const anagramItem = document.createElement('anagram-item');
+                    anagramItem.setItem(item);
+                    return anagramItem;
                 }
             };
         },

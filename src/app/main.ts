@@ -1,6 +1,7 @@
 import { createAnagramList } from './anagram-list';
 import './very-long-list/very-long-list';
 import './anagram-input';
+import './anagram-item';
 import { debounceWithAbort } from './utils';
 
 async function initialize(): Promise<void> {

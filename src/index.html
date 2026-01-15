@@ -15,7 +15,7 @@
                 <div id="content-container">
                     <div id="content"></div> 
                 </div>
-                <div>
+                <div class="scrollbar-container">
                     <very-long-list-scrollbar></very-long-list-scrollbar>
                 </div>
             </div>
@@ -28,7 +28,15 @@
         </template>
         <template id="anagram-input-template">
             <link rel="stylesheet" href="anagram-input.css"/>
-            <input type="text"/>
+            <div class="container">
+                <input type="text"/>
+            </div>
+        </template>
+        <template id="anagram-template">
+            <link rel="stylesheet" href="anagram.css"/>
+            <div class="container">
+                <span id="content">content</span>
+            </div>
         </template>
         <template id="very-long-list-scrollbar-template">
             <link rel="stylesheet" href="very-long-list-scrollbar.css"/>
