@@ -93,12 +93,12 @@ class ConnectedVeryLongList {
     }
 
     displayData(data: VeryLongListData | undefined, abortSignal: AbortSignal): void {
+        this.scrollbar.visible = false;
         if(this.displayedData){
             this.displayedData.destroy();
             this.displayedData = undefined;
         }
         if(!data){
-            this.scrollbar.visible = false;
             return;
         }
         this.displayedData = DisplayedData.create<unknown, VeryLongListItem>(
