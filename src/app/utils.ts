@@ -131,3 +131,53 @@ export function createQueuedLockManager(): QueuedLockManager {
         }
     }
 }
+
+export interface EventTargetWithMap<TTarget, TMap> {
+    addEventListener<TKey extends keyof TMap>(key: TKey, listener: (this: TTarget, e: TMap[TKey]) => void, options?: boolean | AddEventListenerOptions): void
+    removeEventListener<TKey extends keyof TMap>(key: TKey, listener: (this: TTarget, e: TMap[TKey]) => void, options?: boolean | AddEventListenerOptions): void
+}
+
+type TargetType<TTarget extends EventTargetWithMap<TTarget, unknown>> = Pick<TTarget, 'addEventListener'>
+
+class RegisteredListener<TKey extends keyof TMap, TTarget extends EventTargetWithMap<TTarget, TMap>, TMap> {
+    constructor(
+        private readonly target: TTarget,
+        private readonly key: TKey,
+        private readonly listener: (this: TTarget, e: TMap[TKey]) => void,
+        private readonly options?: boolean | AddEventListenerOptions
+    ){}
+    static create<TKey extends keyof TMap, TTarget extends EventTargetWithMap<TTarget, TMap>, TMap>(
+        target: TTarget,
+        key: TKey,
+        listener: (this: TTarget, e: TMap[TKey]) => void,
+        options?: boolean | AddEventListenerOptions
+    ): RegisteredListener<TKey, TTarget, TMap> {
+        target.addEventListener(key, listener, options);
+        return new RegisteredListener(target, key, listener, options)
+    }
+
+    destroy(): void {
+        this.target.removeEventListener(this.key, this.listener, this.options);
+    }
+}
+
+export class RegisteredListeners {
+    private readonly listeners: {destroy(): void}[] = []
+
+    target<TTarget extends EventTargetWithMap<TTarget, unknown>>(target: TTarget): TargetType<TTarget> {
+        return {
+            addEventListener: (key, listener, options) => {
+                this.listeners.push(RegisteredListener.create(target, key, listener, options))
+            }
+        }
+    }
+
+    destroy(): void {
+        for(const listener of this.listeners) {
+            listener.destroy();
+        }
+        this.listeners.splice(0, this.listeners.length);
+    }
+}
+
+

@@ -29,9 +29,24 @@
         </template>
         <template id="anagram-input-template">
             <link rel="stylesheet" href="anagram-input.css"/>
-            <div class="container">
-                <input type="text"/>
+            <div id="container" class="empty">
+                <div class="left"></div>
+                <div class="middle">
+                    <div id="placeholder">type here</div>
+                    <div id="elements"></div>
+                </div>
+                <div class="right">
+                    <input type="text" size="1" id="input"/>
+                </div>
             </div>
+        </template>
+        <template id="anagram-input-element-template">
+            <link rel="stylesheet" href="anagram-input-element.css"/>
+            <div draggable="true"></div>
+        </template>
+        <template id="anagram-input-drop-location-template">
+            <link rel="stylesheet" href="anagram-input-drop-location.css"/>
+            <div></div>
         </template>
         <template id="anagram-template">
             <link rel="stylesheet" href="anagram.css"/>
