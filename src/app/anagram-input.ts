@@ -65,7 +65,7 @@ class ConnectedAnagramInput {
         lastElement.removeCharacter();
     }
     private handleContainerDragEnter(e: DragEvent): void {
-        
+
     }
     private handleContainerDragLeave(e: DragEvent): void {
         
@@ -160,7 +160,12 @@ class ConnectedAnagramInput {
     }
 
     private handleElementDragEnterElement(element: AnagramInputElement): void {
-        if(this.draggedElement === element || !this.draggedElement) {
+        if(!this.draggedElement){
+            return;
+        }
+        if(this.draggedElement === element) {
+            this.removeDropLocation1();
+            this.removeDropLocation2();
             return;
         }
         const elementIndex = this.elements.indexOf(element);
@@ -170,27 +175,31 @@ class ConnectedAnagramInput {
             if(!this.dropLocation1) {
                 this.dropLocation1 = createDropLocation(this.draggedElement);
             }
-            this.elementsContainer.insertBefore(this.dropLocation1, element);
+            if(this.dropLocation1.nextElementSibling !== element) {
+                this.elementsContainer.insertBefore(this.dropLocation1, element);
+            }
         }else{
             this.removeDropLocation1();
         }
         if(rightOfElement !== this.draggedElement) {
             if(!this.dropLocation2){
                 this.dropLocation2 = createDropLocation(this.draggedElement);
+                if(rightOfElement === undefined){
+                    this.elementsContainer.appendChild(this.dropLocation2)
+                }
             }
             if(rightOfElement === undefined){
-                this.elementsContainer.appendChild(this.dropLocation2)
+                if(this.dropLocation2.nextElementSibling !== null) {
+                    this.elementsContainer.appendChild(this.dropLocation2)
+                }   
             }else{
-                this.elementsContainer.insertBefore(this.dropLocation2, rightOfElement)
+                if(this.dropLocation2.nextElementSibling !== rightOfElement){
+                    this.elementsContainer.insertBefore(this.dropLocation2, rightOfElement)
+                }
+                
             }
         }else{
             this.removeDropLocation2();
-        }
-        if(this.dropLocation1){
-            this.dropLocation1.hideDraggedValue();
-        }
-        if(this.dropLocation2){
-            this.dropLocation2.hideDraggedValue();
         }
     }
     

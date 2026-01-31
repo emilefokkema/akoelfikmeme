@@ -3,7 +3,8 @@
     "compilerOptions": {
         "lib": [
             "ESNext",
-            "DOM"
+            "DOM",
+            "DOM.Iterable"
         ],
         "rootDir": ".",
         "outDir": "../../dist-types/src/app"

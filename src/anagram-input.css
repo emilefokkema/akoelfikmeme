@@ -42,15 +42,26 @@
     background-color: rgba(0, 0, 0, .1);
 }
 #container.dragging anagram-input-element {
-    margin-left: .2em;
+    margin-left: var(--drag-drop-spacing);
+}
+#container.dragging anagram-input-element:state(dragged) + anagram-input-element {
+    margin-left: 0;
+}
+#container.dragging anagram-input-element:state(dragged) {
+    margin-left: 0;
 }
 #container.dragging anagram-input-element:last-child {
-    margin-right: .2em;
+    margin-right: var(--drag-drop-spacing);
 }
 #container.dragging anagram-input-drop-location + anagram-input-element {
     margin-left: 0;
 }
-
+anagram-input-drop-location:state(element-dragged-over):not(:first-child) {
+    margin-left: var(--drag-drop-spacing);
+}
+#container.dragging anagram-input-drop-location:state(element-dragged-over) + anagram-input-element {
+    margin-left: var(--drag-drop-spacing);
+}
 input {
     padding: 0;
     border: 0;

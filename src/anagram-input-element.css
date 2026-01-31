@@ -1,4 +1,4 @@
 div.dragged {
-    opacity:0;
-    width: 0;
+    width: var(--drag-drop-spacing);
+    height: 1lh;
 }

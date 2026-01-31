@@ -1,5 +1,7 @@
 div {
-    width: .2em;
     color: #555;
     height: 1lh;
+}
+div.empty {
+    width: var(--drag-drop-spacing);
 }

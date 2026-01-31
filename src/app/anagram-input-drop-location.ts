@@ -5,6 +5,7 @@ class ConnectedAnagramInputDropLocation {
     constructor(
         private readonly container: HTMLElement,
         private readonly dispatchEvent: (ev: Event) => void,
+        private readonly stateSet: CustomStateSet,
         listeners: RegisteredListeners
     ){
         listeners.target(container).addEventListener('dragenter', (e) => this.handleDragEnterContainer(e));
@@ -12,7 +13,6 @@ class ConnectedAnagramInputDropLocation {
     }
 
     private handleDragEnterContainer(e: DragEvent): void {
-        //e.stopPropagation();
         const dataTransfer = e.dataTransfer;
         if(!dataTransfer || !dataTransfer.types.includes('anagram/element')) {
             return;
@@ -21,31 +21,31 @@ class ConnectedAnagramInputDropLocation {
         this.dispatchEvent(new CustomEvent('elementdragenter', { bubbles: true, composed: true }));
         if(this.draggedValue !== undefined) {
             this.container.textContent = this.draggedValue;
-            this.container.style.width = 'unset'
         }
-    }
-
-    hideDraggedValue(): void {
-        this.container.textContent = '';
-        this.container.style.width = '.2em'
+        this.container.classList.remove('empty');
+        this.stateSet.add('element-dragged-over')
     }
 
     private handleDragLeaveContainer(e: DragEvent): void {
         if(e.target !== this.container){
             return;
         }
-        this.hideDraggedValue();
+        this.container.textContent = '';
+        this.stateSet.delete('element-dragged-over')
+        this.container.classList.add('empty')
     }
 
     static create(
         shadowRoot: ShadowRoot,
         dispatchEvent: (ev: Event) => void,
+        stateSet: CustomStateSet,
         listeners: RegisteredListeners
     ): ConnectedAnagramInputDropLocation {
         const container = shadowRoot.querySelector('div') as HTMLElement;
         return new ConnectedAnagramInputDropLocation(
             container,
             dispatchEvent,
+            stateSet,
             listeners
         )
     }
@@ -55,6 +55,7 @@ export class AnagramInputDropLocation extends HTMLElement {
     private connected: ConnectedAnagramInputDropLocation | undefined;
     private listeners: RegisteredListeners | undefined;
     private _draggedValue: string | undefined
+    private internals: ElementInternals
 
     public get draggedValue(): string | undefined {
         if(this.connected){
@@ -70,11 +71,9 @@ export class AnagramInputDropLocation extends HTMLElement {
         this._draggedValue = value;
     }
 
-    hideDraggedValue(): void {
-        if(!this.connected){
-            return;
-        }
-        this.connected.hideDraggedValue();
+    constructor(){
+        super()
+        this.internals = this.attachInternals(); 
     }
 
     protected connectedCallback(): void {
@@ -89,6 +88,7 @@ export class AnagramInputDropLocation extends HTMLElement {
         this.connected = ConnectedAnagramInputDropLocation.create(
             shadowRoot,
             (e) => this.dispatchEvent(e),
+            this.internals.states,
             listeners
         );
         this.connected.draggedValue = this._draggedValue;
