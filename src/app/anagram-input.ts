@@ -1,9 +1,9 @@
 import type { AnagramElements } from "../shared/anagram-list-messages";
 import { RegisteredListeners, type EventTargetWithMap } from "./utils";
 import './anagram-input-element'
-import './anagram-input-drop-location';
+import './anagram-input-overlay-element'
 import { AnagramInputElement, type AnagramInputElementEventMap } from "./anagram-input-element";
-import { AnagramInputDropLocation } from "./anagram-input-drop-location";
+import type { AnagramInputOverlayElement, AnagramInputOverlayEventMap } from "./anagram-input-overlay-element";
 
 function getAnagramElementsFromString(input: string): AnagramElements {
     let match;
@@ -15,18 +15,12 @@ function getAnagramElementsFromString(input: string): AnagramElements {
     return result;
 }
 
-function createDropLocation(draggedElement: AnagramInputElement): AnagramInputDropLocation {
-    const element = document.createElement('anagram-input-drop-location');
-    element.draggedValue = draggedElement.value;
-    return element;
-}
 
 class ConnectedAnagramInput {
     private listeners: RegisteredListeners = new RegisteredListeners();
     private elements: AnagramInputElement[] = []
     private draggedElement: AnagramInputElement | undefined
-    private dropLocation1: AnagramInputDropLocation | undefined
-    private dropLocation2: AnagramInputDropLocation | undefined
+    private overlayElements: AnagramInputOverlayElement[] = []
     public get value(): AnagramElements {
         return this.elements.map(e => e.value)
     }
@@ -34,17 +28,19 @@ class ConnectedAnagramInput {
         private readonly container: HTMLElement,
         private readonly input: HTMLInputElement,
         private readonly elementsContainer: HTMLElement,
+        private readonly overlayElementsContainer: HTMLElement,
         private readonly dispatchEvent: (ev: Event) => void
     ){
         const elementsContainerEventTarget = elementsContainer as EventTargetWithMap<HTMLElement, AnagramInputElementEventMap>
+        const overlayElementsContainerTarget = this.listeners.target<EventTargetWithMap<HTMLElement, AnagramInputOverlayEventMap>>(overlayElementsContainer);
         this.listeners.target(input).addEventListener('input', (e) => this.handleInput(e))
         this.listeners.target(input).addEventListener('focus', () => this.handleInputFocus());
         this.listeners.target(input).addEventListener('blur', () => this.handleInputBlur())
         this.listeners.target(input).addEventListener('keydown', (e) => this.handleInputKeydown(e))
         this.listeners.target(elementsContainerEventTarget).addEventListener('elementremoved', (e) => this.handleElementRemoved(e))
         this.listeners.target(elementsContainerEventTarget).addEventListener('elementdragstart', (e) => this.handleElementDragStart(e))
-        this.listeners.target(elementsContainerEventTarget).addEventListener('elementdragend', (e) => this.handleElementDragEnd(e))
-        this.listeners.target(elementsContainerEventTarget).addEventListener('elementdragenter', (e) => this.handleElementDragEnter(e))
+        this.listeners.target(elementsContainerEventTarget).addEventListener('elementdragend', () => this.handleElementDragEnd())
+        overlayElementsContainerTarget.addEventListener('elementdragenter', (e) => this.handleElementDragEnterOverlayElement(e))
         this.listeners.target(container).addEventListener('click', () => this.handleContainerClick())
         this.listeners.target(container).addEventListener('dragleave', (e) => this.handleContainerDragLeave(e))
         this.listeners.target(container).addEventListener('dragenter', (e) => this.handleContainerDragEnter(e))
@@ -76,8 +72,6 @@ class ConnectedAnagramInput {
         if(e.clientX >= x && e.clientX <= x + width && e.clientY >= y && e.clientY <= y + height) {
             return;
         }
-        this.removeDropLocation1();
-        this.removeDropLocation2();
     }
 
     private handleInputFocus(): void {
@@ -118,103 +112,33 @@ class ConnectedAnagramInput {
             return;
         }
         this.draggedElement = target;
-        this.container.classList.add('dragging');
+        this.setupOverlay();
+        this.container.classList.add('drag-active');
+
     }
 
-    private handleElementDragEnd(e: Event): void {
-        const target = e.target;
-        if(!(target instanceof AnagramInputElement) || target !== this.draggedElement) {
-            return;
-        }
-        this.draggedElement = undefined;
-        this.removeDropLocation1();
-        this.removeDropLocation2();
-        this.container.classList.remove('dragging')
+    private handleElementDragEnterOverlayElement(e: Event): void {
+        console.log('element drag enters overlay element', e.target)
     }
 
-    private handleElementDragEnter(e: Event): void {
-        if(!this.draggedElement) {
-            return;
+    private setupOverlay(): void {
+        for(const overlayElement of this.overlayElements) {
+            overlayElement.remove();
         }
-        const target = e.target;
-        if(target instanceof AnagramInputElement) {
-            this.handleElementDragEnterElement(target);
-            return;
-        }
-        if(target instanceof AnagramInputDropLocation) {
-            this.handleElementDragEnterDropLocation(target);
-            return;
-        }
-        
-    }
-
-    private handleElementDragEnterDropLocation(location: AnagramInputDropLocation): void {
-        if(location === this.dropLocation1) {
-            this.removeDropLocation2();
-            return;
-        }
-        if(location === this.dropLocation2) {
-            this.removeDropLocation1();
-            return;
+        this.overlayElements.splice(0, this.overlayElements.length);
+        for(let i = 0; i < this.elements.length; i++){
+            const element = this.elements[i];
+            const overlayElement = document.createElement('anagram-input-overlay-element');
+            overlayElement.value = element.value;
+            this.overlayElementsContainer.appendChild(overlayElement);
+            this.overlayElements.push(overlayElement)
         }
     }
 
-    private handleElementDragEnterElement(element: AnagramInputElement): void {
-        if(!this.draggedElement){
-            return;
-        }
-        if(this.draggedElement === element) {
-            this.removeDropLocation1();
-            this.removeDropLocation2();
-            return;
-        }
-        const elementIndex = this.elements.indexOf(element);
-        const leftOfElement = elementIndex > 0 ? this.elements[elementIndex - 1] : undefined;
-        const rightOfElement = elementIndex > -1 && elementIndex < this.elements.length - 1 ? this.elements[elementIndex + 1] : undefined;
-        if(leftOfElement !== this.draggedElement) {
-            if(!this.dropLocation1) {
-                this.dropLocation1 = createDropLocation(this.draggedElement);
-            }
-            if(this.dropLocation1.nextElementSibling !== element) {
-                this.elementsContainer.insertBefore(this.dropLocation1, element);
-            }
-        }else{
-            this.removeDropLocation1();
-        }
-        if(rightOfElement !== this.draggedElement) {
-            if(!this.dropLocation2){
-                this.dropLocation2 = createDropLocation(this.draggedElement);
-                if(rightOfElement === undefined){
-                    this.elementsContainer.appendChild(this.dropLocation2)
-                }
-            }
-            if(rightOfElement === undefined){
-                if(this.dropLocation2.nextElementSibling !== null) {
-                    this.elementsContainer.appendChild(this.dropLocation2)
-                }   
-            }else{
-                if(this.dropLocation2.nextElementSibling !== rightOfElement){
-                    this.elementsContainer.insertBefore(this.dropLocation2, rightOfElement)
-                }
-                
-            }
-        }else{
-            this.removeDropLocation2();
-        }
+    private handleElementDragEnd(): void {
+        this.container.classList.remove('drag-active');
     }
-    
-    private removeDropLocation1(): void {
-        if(this.dropLocation1){
-            this.dropLocation1.remove();
-            this.dropLocation1 = undefined;
-        }
-    }
-    private removeDropLocation2(): void {
-        if(this.dropLocation2){
-            this.dropLocation2.remove();
-            this.dropLocation2 = undefined;
-        }
-    }
+
     private removeElement(element: unknown): void {
         if(!(element instanceof AnagramInputElement)) {
             return;
@@ -248,10 +172,12 @@ class ConnectedAnagramInput {
         const container = shadow.getElementById('container') as HTMLElement;
         const input = shadow.getElementById('input') as HTMLInputElement;
         const elements = shadow.getElementById('elements') as HTMLElement;
+        const overlayElementsContainer = shadow.getElementById('overlay-elements') as HTMLElement;
         return new ConnectedAnagramInput(
             container,
             input,
             elements,
+            overlayElementsContainer,
             dispatchEvent
         );
     }

@@ -12,10 +12,6 @@ export interface ElementDragOverEvent extends CustomEvent {
 
 }
 
-export interface ElementDragEnterEvent extends CustomEvent {
-
-}
-
 export interface ElementRemovedEvent extends CustomEvent {
 
 }
@@ -24,23 +20,15 @@ export interface AnagramInputElementEventMap extends HTMLElementEventMap {
     'elementdragstart': ElementDragStartEvent
     'elementremoved': ElementRemovedEvent
     'elementdragend': ElementDragEndEvent
-    'elementdragover': ElementDragOverEvent
-    'elementdragenter': ElementDragEnterEvent
 }
 class ConnectedAnagramInputElement {
     private listeners: RegisteredListeners = new RegisteredListeners();
-    private isDragged = false;
     constructor(
         private readonly container: HTMLElement,
-        private readonly dispatchEvent: (e: Event) => void,
-        private readonly customStates: CustomStateSet
+        private readonly dispatchEvent: (e: Event) => void
     ){
         this.listeners.target(container).addEventListener('dragstart', (e) => this.handleDragStart(e));
         this.listeners.target(container).addEventListener('dragend', (e) => this.handleDragEnd(e));
-        this.listeners.target(container).addEventListener('dragenter', (e) => this.handleDragEnter(e))
-        this.listeners.target(container).addEventListener('dragleave', () => this.handleDragLeave())
-        this.listeners.target(container).addEventListener('dragover', (e) => this.handleDragOver(e))
-        this.listeners.target(container).addEventListener('drop', (e) => this.handleDrop(e))
     }
     private _value: string | undefined;
     public get value(): string {
@@ -64,77 +52,22 @@ class ConnectedAnagramInputElement {
             return;
         }
         dataTransfer.items.add('', 'anagram/element');
-        this.container.classList.add('dragged');
-        this.customStates.add('dragged');
-        this.container.textContent = ''
-        this.isDragged = true;
         this.dispatchEvent(new CustomEvent('elementdragstart', { bubbles: true, composed: true }))
     }
     private handleDragEnd(e: DragEvent): void {
-        e.stopPropagation();
-        this.container.classList.remove('dragged');
-        this.customStates.delete('dragged')
-        this.isDragged = false;
-        if(this._value !== undefined){
-            this.container.textContent = this._value;
-        }
         this.dispatchEvent(new CustomEvent('elementdragend', { bubbles: true, composed: true }))
-    }
-    private handleDragOver(e: DragEvent): void {
-        //e.stopPropagation();
-        const dataTransfer = e.dataTransfer;
-        if(!dataTransfer || !dataTransfer.types.includes('anagram/element')) {
-            return;
-        }
-        dataTransfer.dropEffect = 'move';
-        //e.preventDefault();
-        this.dispatchEvent(new CustomEvent('elementdragover', { bubbles: true, composed: true }))
-    }
-    private handleDragEnter(e: DragEvent): void {
-        //e.stopPropagation();
-        const dataTransfer = e.dataTransfer;
-        if(!dataTransfer || !dataTransfer.types.includes('anagram/element')) {
-            return;
-        }
-        dataTransfer.dropEffect = 'move';
-        if(this.isDragged){
-            this.container.classList.remove('dragged');
-            this.customStates.delete('dragged')
-            if(this._value !== undefined){
-                this.container.textContent = this._value;
-            }
-            
-        }
-        this.dispatchEvent(new CustomEvent('elementdragenter', { bubbles: true, composed: true }))
-    }
-    private handleDragLeave(): void {
-        if(this.isDragged){
-            this.container.classList.add('dragged');
-            this.customStates.add('dragged')
-            this.container.textContent = '';
-        }
-    }
-    private handleDrop(e: DragEvent): void {
-        e.stopPropagation();
-        const dataTransfer = e.dataTransfer;
-        if(!dataTransfer) {
-            return;
-        }
-        console.log('drop happened', dataTransfer.dropEffect)
     }
     destroy(): void {
         this.listeners.destroy();
     }
     static create(
         shadow: ShadowRoot,
-        dispatchEvent: (e: Event) => void,
-        customStates: CustomStateSet
+        dispatchEvent: (e: Event) => void
     ): ConnectedAnagramInputElement {
         const container = shadow.querySelector('div') as HTMLElement;
         return new ConnectedAnagramInputElement(
             container,
-            dispatchEvent,
-            customStates
+            dispatchEvent
         );
     }
 }
@@ -142,7 +75,6 @@ class ConnectedAnagramInputElement {
 export class AnagramInputElement extends HTMLElement {
     private connected: ConnectedAnagramInputElement | undefined
     private _value: string | undefined
-    private internals: ElementInternals;
 
     public get value(): string {
         if(!this.connected){
@@ -156,10 +88,6 @@ export class AnagramInputElement extends HTMLElement {
             return;
         }
         this.connected.value = value;
-    }
-    constructor(){
-        super();
-        this.internals = this.attachInternals();
     }
     public removeCharacter(): void {
         if(!this.connected){
@@ -181,8 +109,7 @@ export class AnagramInputElement extends HTMLElement {
 
         const connected = ConnectedAnagramInputElement.create(
             shadow,
-            (e) => this.dispatchEvent(e),
-            this.internals.states
+            (e) => this.dispatchEvent(e)
         );
         this.connected = connected;
         if(this._value) {

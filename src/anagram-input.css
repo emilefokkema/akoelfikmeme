@@ -3,19 +3,26 @@
     cursor:text;
 }
 
+.container-like {
+    padding: 5px;
+    border-width: 1px;
+    border-color: transparent;
+}
+
 #container {
     display: flex;
     flex-direction: row;
     min-height: 1lh;
-    padding: 5px;
-    border-width: 1px;
     border-style: solid;
-    border-color: transparent;
+    position: relative;
 }
 #container.focused {
     border-color: rgba(0, 0, 0, .3);
 }
 #elements {
+    display: flex;
+}
+#overlay-elements {
     display: flex;
 }
 #placeholder {
@@ -41,26 +48,18 @@
 #container.empty:not(.focused) {
     background-color: rgba(0, 0, 0, .1);
 }
-#container.dragging anagram-input-element {
-    margin-left: var(--drag-drop-spacing);
+#dragging-overlay {
+    display: none;
+    position:absolute;
+    left: 0;
+    top: 0;
+    background-color: #f00;
+    width: calc(100% - 10px);
+    opacity: .4;
 }
-#container.dragging anagram-input-element:state(dragged) + anagram-input-element {
-    margin-left: 0;
-}
-#container.dragging anagram-input-element:state(dragged) {
-    margin-left: 0;
-}
-#container.dragging anagram-input-element:last-child {
-    margin-right: var(--drag-drop-spacing);
-}
-#container.dragging anagram-input-drop-location + anagram-input-element {
-    margin-left: 0;
-}
-anagram-input-drop-location:state(element-dragged-over):not(:first-child) {
-    margin-left: var(--drag-drop-spacing);
-}
-#container.dragging anagram-input-drop-location:state(element-dragged-over) + anagram-input-element {
-    margin-left: var(--drag-drop-spacing);
+#container.drag-active #dragging-overlay {
+    display: flex;
+
 }
 input {
     padding: 0;
