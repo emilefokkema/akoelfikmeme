@@ -34,13 +34,18 @@
                 <div class="middle">
                     <div id="placeholder">type here</div>
                     <div id="elements"></div>
+                    
                 </div>
                 <div class="right">
                     <input type="text" size="1" id="input"/>
                 </div>
                 <div id="dragging-overlay" class="container-like">
                     <div class="left"></div>
-                    <div id="overlay-elements"></div>
+                    <div class="elements-wrapper">
+                        <div id="first-interstice"></div>
+                        <div id="overlay-elements"></div>
+                    </div>
+                    
                     <div class="right"></div>
                 </div>
             </div>
@@ -51,8 +56,9 @@
         </template>
         <template id="anagram-input-overlay-element-template">
             <link rel="stylesheet" href="anagram-input-overlay-element.css"/>
-            <div>
-                <span></span>
+            <div id="container">
+                <span id="text-container"></span>
+                <div id="interstice"></div>
             </div>
         </template>
         <template id="anagram-input-drop-location-template">

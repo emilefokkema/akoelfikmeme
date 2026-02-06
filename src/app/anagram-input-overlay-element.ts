@@ -1,11 +1,8 @@
 import { CustomElement, type ConnectedElement } from "./utils";
 
-export interface ElementDragEnterEvent extends CustomEvent {
-
-}
-
 export interface AnagramInputOverlayEventMap extends HTMLElementEventMap {
-    'elementdragenter': ElementDragEnterEvent
+    'elementdragenter': CustomEvent
+    'elementdragenterinterstice': CustomEvent
 }
 class ConnectedAnagramInputOverlayElement {
     private _value: string | undefined;
@@ -18,25 +15,38 @@ class ConnectedAnagramInputOverlayElement {
         this.textContainer.textContent = value || '';
     }
     constructor(
+        container: HTMLElement,
         private readonly textContainer: HTMLElement,
+        private readonly interstice: HTMLElement,
         private readonly connectedElement: ConnectedElement
     ){
-        connectedElement.listeners.target(textContainer).addEventListener('dragenter', (e) => this.handleDragEnter(e))
+        connectedElement.listeners.target(container).addEventListener('dragenter', (e) => this.handleDragEnter(e))
     }
 
     private handleDragEnter(e: DragEvent): void {
         if(!e.dataTransfer?.types.includes('anagram/element')){
             return;
         }
-        this.connectedElement.dispatchEvent(new CustomEvent('elementdragenter', { composed: true, bubbles: true}))
+        e.stopPropagation();
+        if(e.target === this.textContainer){
+            this.connectedElement.dispatchEvent(new CustomEvent('elementdragenter', { composed: true, bubbles: true}));
+            return;
+        }
+        if(e.target === this.interstice) {
+            this.connectedElement.dispatchEvent(new CustomEvent('elementdragenterinterstice', { composed: true, bubbles: true}));
+        }
     }
 
     static create(
         connectedElement: ConnectedElement
     ): ConnectedAnagramInputOverlayElement {
-        const textContainer = connectedElement.shadowRoot.querySelector('span') as HTMLElement;
+        const container = connectedElement.shadowRoot.getElementById('container') as HTMLElement;
+        const textContainer = connectedElement.shadowRoot.getElementById('text-container') as HTMLElement;
+        const interstice = connectedElement.shadowRoot.getElementById('interstice') as HTMLElement;
         return new ConnectedAnagramInputOverlayElement(
+            container,
             textContainer,
+            interstice,
             connectedElement
         )
     }

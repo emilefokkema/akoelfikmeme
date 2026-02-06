@@ -53,13 +53,20 @@
     position:absolute;
     left: 0;
     top: 0;
-    background-color: #f00;
     width: calc(100% - 10px);
-    opacity: .4;
+    opacity: 0;
 }
 #container.drag-active #dragging-overlay {
     display: flex;
 
+}
+.elements-wrapper {
+    display: flex;
+}
+#first-interstice {
+    width: var(--drag-drop-spacing);
+    background-color: #0f0;
+    height: 1lh;
 }
 input {
     padding: 0;

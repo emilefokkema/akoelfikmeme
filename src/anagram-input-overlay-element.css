@@ -1,0 +1,13 @@
+#container {
+    background-color: #00f;
+    color: transparent;
+    position: relative;
+}
+#interstice {
+    width: var(--drag-drop-spacing);
+    background-color: rgba(0, 255, 0, .5);
+    height: 1lh;
+    position:absolute;
+    top: 0;
+    right: 0;
+}

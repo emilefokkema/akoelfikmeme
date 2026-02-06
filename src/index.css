@@ -1,7 +1,7 @@
 :root {
     --font-size: 25px;
     font-size: var(--font-size);
-    --drag-drop-spacing: 1px;
+    --drag-drop-spacing: 3px;
 }
 
 body {

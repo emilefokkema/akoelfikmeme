@@ -52,9 +52,11 @@ class ConnectedAnagramInputElement {
             return;
         }
         dataTransfer.items.add('', 'anagram/element');
+        this.container.classList.add('dragged')
         this.dispatchEvent(new CustomEvent('elementdragstart', { bubbles: true, composed: true }))
     }
     private handleDragEnd(e: DragEvent): void {
+        this.container.classList.remove('dragged')
         this.dispatchEvent(new CustomEvent('elementdragend', { bubbles: true, composed: true }))
     }
     destroy(): void {
