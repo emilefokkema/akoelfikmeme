@@ -1,8 +1,19 @@
-import { CustomElement, type ConnectedElement } from "./utils";
+import { CustomElement, type ConnectedElement } from "./html-utils";
 
+export interface ElementDropEvent extends CustomEvent {
+    detail: {
+        location: 'inside' | 'after'
+    }
+}
+
+export interface ElementDragEnterEvent extends CustomEvent {
+    detail: {
+        location: 'inside' | 'after'
+    }
+}
 export interface AnagramInputOverlayEventMap extends HTMLElementEventMap {
-    'elementdragenter': CustomEvent
-    'elementdragenterinterstice': CustomEvent
+    'elementdragenter': ElementDragEnterEvent
+    'elementdrop': ElementDropEvent
 }
 class ConnectedAnagramInputOverlayElement {
     private _value: string | undefined;
@@ -20,7 +31,9 @@ class ConnectedAnagramInputOverlayElement {
         private readonly interstice: HTMLElement,
         private readonly connectedElement: ConnectedElement
     ){
-        connectedElement.listeners.target(container).addEventListener('dragenter', (e) => this.handleDragEnter(e))
+        connectedElement.listeners.target(container).addEventListener('dragenter', (e) => this.handleDragEnter(e));
+        connectedElement.listeners.target(container).addEventListener('dragover', (e) => this.handleDragOver(e));
+        connectedElement.listeners.target(container).addEventListener('drop', (e) => this.handleDrop(e));
     }
 
     private handleDragEnter(e: DragEvent): void {
@@ -29,12 +42,41 @@ class ConnectedAnagramInputOverlayElement {
         }
         e.stopPropagation();
         if(e.target === this.textContainer){
-            this.connectedElement.dispatchEvent(new CustomEvent('elementdragenter', { composed: true, bubbles: true}));
+            const event: ElementDragEnterEvent = new CustomEvent('elementdragenter', { composed: true, bubbles: true, detail: { location: 'inside' as const}})
+            this.connectedElement.dispatchEvent(event);
             return;
         }
         if(e.target === this.interstice) {
-            this.connectedElement.dispatchEvent(new CustomEvent('elementdragenterinterstice', { composed: true, bubbles: true}));
+            const event: ElementDragEnterEvent = new CustomEvent('elementdragenter', { composed: true, bubbles: true, detail: { location: 'after' as const}})
+            this.connectedElement.dispatchEvent(event);
         }
+    }
+
+    private handleDragOver(e: DragEvent): void {
+        if(!e.dataTransfer?.types.includes('anagram/element')){
+            return;
+        }
+        e.stopPropagation();
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move'
+    }
+
+    private handleDrop(e: DragEvent): void {
+        if(!e.dataTransfer?.types.includes('anagram/element')){
+            return;
+        }
+
+        const event: ElementDropEvent = new CustomEvent(
+            'elementdrop',
+            { 
+                bubbles: true,
+                composed: true,
+                detail: { 
+                    location: e.target === this.interstice ? 'after' as const : 'inside' as const
+                }
+            }
+        );
+        this.connectedElement.dispatchEvent(event)
     }
 
     static create(

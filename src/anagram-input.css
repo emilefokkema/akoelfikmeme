@@ -12,7 +12,7 @@
 #container {
     display: flex;
     flex-direction: row;
-    min-height: 1lh;
+    min-height: calc(1lh + var(--longer-value-border-width));
     border-style: solid;
     position: relative;
 }
@@ -75,6 +75,16 @@ input {
     font-size: var(--font-size);
     position: absolute;
     background-color: transparent;
+}
+
+anagram-input-element {
+    border-bottom-width: var(--longer-value-border-width);
+    border-bottom-style: solid;
+    border-bottom-color: transparent;
+}
+
+anagram-input-element:state(longer-value){
+    border-bottom-color: #000;
 }
 
 #input2 {

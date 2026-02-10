@@ -3,7 +3,7 @@ import { RegisteredListeners, type EventTargetWithMap } from "./utils";
 import './anagram-input-element'
 import './anagram-input-overlay-element'
 import { AnagramInputElement, type AnagramInputElementEventMap } from "./anagram-input-element";
-import { AnagramInputOverlayElement, type AnagramInputOverlayEventMap } from "./anagram-input-overlay-element";
+import { AnagramInputOverlayElement, type AnagramInputOverlayEventMap, type ElementDragEnterEvent, type ElementDropEvent } from "./anagram-input-overlay-element";
 
 function getAnagramElementsFromString(input: string): AnagramElements {
     let match;
@@ -22,6 +22,7 @@ class ConnectedAnagramInput {
     private draggedElement: AnagramInputElement | undefined
     private overlayElements: AnagramInputOverlayElement[] = []
     private draggedElementPreview: AnagramInputElement | undefined
+    private elementWithDraggedElementPreview: AnagramInputElement | undefined
     public get value(): AnagramElements {
         return this.elements.map(e => e.value)
     }
@@ -30,22 +31,28 @@ class ConnectedAnagramInput {
         private readonly input: HTMLInputElement,
         private readonly elementsContainer: HTMLElement,
         private readonly overlayElementsContainer: HTMLElement,
+        private readonly firstInterstice: HTMLElement,
         private readonly dispatchEvent: (ev: Event) => void
     ){
-        const elementsContainerEventTarget = elementsContainer as EventTargetWithMap<HTMLElement, AnagramInputElementEventMap>
+        const elementsContainerEventTarget = this.listeners.target<EventTargetWithMap<HTMLElement, AnagramInputElementEventMap>>(elementsContainer)
         const overlayElementsContainerTarget = this.listeners.target<EventTargetWithMap<HTMLElement, AnagramInputOverlayEventMap>>(overlayElementsContainer);
-        this.listeners.target(input).addEventListener('input', (e) => this.handleInput(e))
-        this.listeners.target(input).addEventListener('focus', () => this.handleInputFocus());
-        this.listeners.target(input).addEventListener('blur', () => this.handleInputBlur())
-        this.listeners.target(input).addEventListener('keydown', (e) => this.handleInputKeydown(e))
-        this.listeners.target(elementsContainerEventTarget).addEventListener('elementremoved', (e) => this.handleElementRemoved(e))
-        this.listeners.target(elementsContainerEventTarget).addEventListener('elementdragstart', (e) => this.handleElementDragStart(e))
-        this.listeners.target(elementsContainerEventTarget).addEventListener('elementdragend', () => this.handleElementDragEnd())
-        overlayElementsContainerTarget.addEventListener('elementdragenter', (e) => this.handleElementDragEnterOverlayElement(e))
-        overlayElementsContainerTarget.addEventListener('elementdragenterinterstice', (e) => this.handleElementDragEnterOverlayInsterstice(e))
-        this.listeners.target(container).addEventListener('click', () => this.handleContainerClick())
-        this.listeners.target(container).addEventListener('dragleave', (e) => this.handleContainerDragLeave(e))
-        this.listeners.target(container).addEventListener('dragenter', (e) => this.handleContainerDragEnter(e))
+        const firstIntersticeTarget = this.listeners.target(firstInterstice);
+        const inputTarget = this.listeners.target(input)
+        const containerTarget = this.listeners.target(container);
+        inputTarget.addEventListener('input', (e) => this.handleInput(e))
+        inputTarget.addEventListener('focus', () => this.handleInputFocus());
+        inputTarget.addEventListener('blur', () => this.handleInputBlur())
+        inputTarget.addEventListener('keydown', (e) => this.handleInputKeydown(e))
+        elementsContainerEventTarget.addEventListener('elementremoved', (e) => this.handleElementRemoved(e))
+        elementsContainerEventTarget.addEventListener('elementdragstart', (e) => this.handleElementDragStart(e))
+        elementsContainerEventTarget.addEventListener('elementdragend', () => this.handleElementDragEnd())
+        overlayElementsContainerTarget.addEventListener('elementdrop', (e) => this.handleElementDrop(e))
+        overlayElementsContainerTarget.addEventListener('elementdragenter', (e) => this.handleElementDragEnter(e))
+        firstIntersticeTarget.addEventListener('dragenter', (e) => this.handleDragEnterFirstInterstice(e))
+        firstIntersticeTarget.addEventListener('dragover', (e) => this.handleDragOverFirstInterstice(e))
+        firstIntersticeTarget.addEventListener('drop', (e) => this.handleDropInFirstInterstice(e))
+        containerTarget.addEventListener('click', () => this.handleContainerClick())
+        containerTarget.addEventListener('dragenter', (e) => this.handleContainerDragEnter(e))
     }
 
     private handleContainerClick(): void {
@@ -61,19 +68,6 @@ class ConnectedAnagramInput {
         }
         const lastElement = this.elements[this.elements.length - 1];
         lastElement.removeCharacter();
-    }
-    private handleContainerDragEnter(e: DragEvent): void {
-
-    }
-    private handleContainerDragLeave(e: DragEvent): void {
-        
-        if(e.target !== this.container) {
-            return;
-        }
-        const { x, y, width, height} = this.container.getBoundingClientRect();
-        if(e.clientX >= x && e.clientX <= x + width && e.clientY >= y && e.clientY <= y + height) {
-            return;
-        }
     }
 
     private handleInputFocus(): void {
@@ -137,7 +131,11 @@ class ConnectedAnagramInput {
         return this.elements[index];
     }
 
-    private handleElementDragEnterOverlayElement(e: Event): void {
+    private handleElementDragEnter(e: ElementDragEnterEvent): void {
+        const draggedElement = this.draggedElement;
+        if(!draggedElement){
+            return;
+        }
         const target = e.target;
         if(!(target instanceof AnagramInputOverlayElement)){
             return;
@@ -146,11 +144,58 @@ class ConnectedAnagramInput {
         if(!element){
             return;
         }
-        console.log(`drag entered overlay element for element '${element.value}'`)
-        this.removeDraggedElementPreview();
+        if(e.detail.location === 'inside'){
+            this.handleElementDragEnterElement(element);
+            return;
+        }
+        this.handleElementDragEnterAfterElement(element);
     }
 
-    private handleElementDragEnterOverlayInsterstice(e: Event): void {
+    private handleElementDragEnterElement(element: AnagramInputElement): void {
+        const draggedElement = this.draggedElement;
+        if(!draggedElement){
+            return;
+        }
+        this.removeDraggedElementPreview();
+        this.removeDraggedElementPreviewFromElement();
+        element.displayAddedValuePreview(draggedElement.value);
+        this.elementWithDraggedElementPreview = element;
+    }
+
+    private removeDraggedElementPreviewFromElement(): void {
+        const elementWithDraggedElementPreview = this.elementWithDraggedElementPreview;
+        if(!elementWithDraggedElementPreview){
+            return;
+        }
+        elementWithDraggedElementPreview.hideAddedValuePreview();
+        this.elementWithDraggedElementPreview = undefined;
+    }
+
+    private handleElementDragEnterAfterElement(element: AnagramInputElement): void {
+        this.removeDraggedElementPreviewFromElement();
+        this.displayDraggedElementPreview(element);
+    }
+
+    private handleDragEnterFirstInterstice(e: DragEvent): void {
+        if(!e.dataTransfer?.types.includes('anagram/element')){
+            return;
+        }
+        e.stopPropagation();
+        this.removeDraggedElementPreviewFromElement();
+        this.displayDraggedElementPreview(undefined);
+    }
+
+    private handleDragOverFirstInterstice(e: DragEvent): void {
+        if(!e.dataTransfer?.types.includes('anagram/element')){
+            return;
+        }
+
+        e.stopPropagation();
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move'
+    }
+
+    private handleElementDrop(e: ElementDropEvent): void {
         const target = e.target;
         if(!(target instanceof AnagramInputOverlayElement)){
             return;
@@ -159,8 +204,44 @@ class ConnectedAnagramInput {
         if(!element){
             return;
         }
-        console.log(`drag entered interstice after element '${element.value}'`)
-        this.displayDraggedElementPreview(element);
+        if(e.detail.location === 'after'){
+            this.moveDraggedElementAfterElement(element);
+        }
+    }
+
+    private moveDraggedElementAfterElement(element: AnagramInputElement): void {
+        const draggedElement = this.draggedElement;
+        if(!draggedElement){
+            return;
+        }
+        const successor = this.findSuccessor(element);
+        const index = this.elements.indexOf(draggedElement);
+        this.elements.splice(index, 1);
+        if(successor){
+            const successorIndex = this.elements.indexOf(successor);
+            this.elements.splice(successorIndex, 0, draggedElement)
+            this.elementsContainer.insertBefore(draggedElement, successor);
+        }else{
+            this.elements.push(draggedElement);
+            this.elementsContainer.appendChild(draggedElement)
+        }
+        this.dispatchEvent(new CustomEvent('input'));
+    }
+
+    private handleDropInFirstInterstice(e: DragEvent): void {
+        if(!e.dataTransfer?.types.includes('anagram/element')){
+            return;
+        }
+        const draggedElement = this.draggedElement;
+        if(!draggedElement){
+            return;
+        }
+        const index = this.elements.indexOf(draggedElement);
+        const firstElement = this.elements[0];
+        this.elements.splice(index, 1);
+        this.elements.splice(0, 0, draggedElement);
+        this.elementsContainer.insertBefore(draggedElement, firstElement);
+        this.dispatchEvent(new CustomEvent('input'));
     }
 
     private setupOverlay(draggedElement: AnagramInputElement): void {
@@ -176,24 +257,42 @@ class ConnectedAnagramInput {
         }
     }
 
-    private displayDraggedElementPreview(afterElement: AnagramInputElement): void {
+    private handleContainerDragEnter(e: DragEvent): void {
+        const path = e.composedPath();
+        if(path.some(t => t === this.overlayElementsContainer)){
+            return;
+        }
+        this.removeDraggedElementPreview();
+    }
+
+    private findSuccessor(element: AnagramInputElement | undefined): AnagramInputElement | undefined {
+        if(!element) {
+            return this.elements[0];
+        }
+        const elementIndex = this.elements.indexOf(element);
+        if(elementIndex === -1){
+            return undefined;
+        }
+        return elementIndex < this.elements.length - 1 ? this.elements[elementIndex + 1] : undefined;
+    }
+
+    private displayDraggedElementPreview(afterElement: AnagramInputElement | undefined): void {
         const draggedElement = this.draggedElement;
         if(!draggedElement){
             return;
         }
-        const elementIndex = this.elements.indexOf(afterElement);
-        if(elementIndex === -1){
-            return;
+        const nextElement = this.findSuccessor(afterElement);
+        let draggedElementPreview = this.draggedElementPreview;
+        if(!draggedElementPreview) {
+            draggedElementPreview = document.createElement('anagram-input-element');
+            draggedElementPreview.value = draggedElement.value;
+            this.draggedElementPreview = draggedElementPreview;
         }
-        const nextElement = elementIndex < this.elements.length - 1 ? this.elements[elementIndex + 1] : undefined;
-        const draggedElementPreview = document.createElement('anagram-input-element');
-        draggedElementPreview.value = draggedElement.value;
         if(nextElement){
             this.elementsContainer.insertBefore(draggedElementPreview, nextElement);
         }else{
             this.elementsContainer.appendChild(draggedElementPreview)
         }
-        this.draggedElementPreview = draggedElementPreview;
     }
 
     private removeDraggedElementPreview(): void {
@@ -213,7 +312,9 @@ class ConnectedAnagramInput {
     private handleElementDragEnd(): void {
         this.clearOverlay();
         this.removeDraggedElementPreview();
+        this.removeDraggedElementPreviewFromElement();
         this.container.classList.remove('drag-active');
+        this.draggedElement = undefined;
     }
 
     private removeElement(element: unknown): void {
@@ -250,11 +351,13 @@ class ConnectedAnagramInput {
         const input = shadow.getElementById('input') as HTMLInputElement;
         const elements = shadow.getElementById('elements') as HTMLElement;
         const overlayElementsContainer = shadow.getElementById('overlay-elements') as HTMLElement;
+        const firstInterstice = shadow.getElementById('first-interstice') as HTMLElement;
         return new ConnectedAnagramInput(
             container,
             input,
             elements,
             overlayElementsContainer,
+            firstInterstice,
             dispatchEvent
         );
     }

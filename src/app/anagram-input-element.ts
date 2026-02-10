@@ -1,4 +1,4 @@
-import { RegisteredListeners } from "./utils";
+import { CustomElement, type ConnectedElement } from "./html-utils";
 
 export interface ElementDragStartEvent extends CustomEvent {
 
@@ -22,28 +22,45 @@ export interface AnagramInputElementEventMap extends HTMLElementEventMap {
     'elementdragend': ElementDragEndEvent
 }
 class ConnectedAnagramInputElement {
-    private listeners: RegisteredListeners = new RegisteredListeners();
     constructor(
         private readonly container: HTMLElement,
-        private readonly dispatchEvent: (e: Event) => void
+        private readonly connectedElement: ConnectedElement
     ){
-        this.listeners.target(container).addEventListener('dragstart', (e) => this.handleDragStart(e));
-        this.listeners.target(container).addEventListener('dragend', (e) => this.handleDragEnd(e));
+        connectedElement.listeners.target(container).addEventListener('dragstart', (e) => this.handleDragStart(e));
+        connectedElement.listeners.target(container).addEventListener('dragend', (e) => this.handleDragEnd(e));
     }
     private _value: string | undefined;
-    public get value(): string {
+    get value(): string {
         return this._value || ''
     }
-    public set value(value: string) {
+    set value(value: string) {
         this._value = value;
         this.container.textContent = value;
+        this.determineLongerValueState(value);
     }
-    public removeCharacter(): void {
+    
+    removeCharacter(): void {
         if(this.value.length === 1){
-            this.dispatchEvent(new CustomEvent('elementremoved', { bubbles: true, composed: true}))
+            this.connectedElement.dispatchEvent(new CustomEvent('elementremoved', { bubbles: true, composed: true}))
             return;
         }
-        this.value = this.value.slice(0, this.value.length - 1)
+        this.value = this.value.slice(0, this.value.length - 1);
+    }
+    displayAddedValuePreview(addedValue: string): void {
+        const previewValue = `${this._value}${addedValue}`;
+        this.container.textContent = previewValue;
+        this.determineLongerValueState(previewValue);
+    }
+    hideAddedValuePreview(): void {
+        this.value = this._value || '';
+    }
+    private determineLongerValueState(value: string | undefined): void {
+        const length = value === undefined ? 0 : value.length;
+        if(length > 1){
+            this.connectedElement.internals.states.add('longer-value');
+        }else{
+            this.connectedElement.internals.states.delete('longer-value');
+        }
     }
     private handleDragStart(e: DragEvent): void {
         e.stopPropagation();
@@ -52,78 +69,87 @@ class ConnectedAnagramInputElement {
             return;
         }
         dataTransfer.items.add('', 'anagram/element');
+        dataTransfer.setDragImage(this.createDragImage(25), 0, 10)
         this.container.classList.add('dragged')
-        this.dispatchEvent(new CustomEvent('elementdragstart', { bubbles: true, composed: true }))
+        this.connectedElement.dispatchEvent(new CustomEvent('elementdragstart', { bubbles: true, composed: true }))
     }
     private handleDragEnd(e: DragEvent): void {
         this.container.classList.remove('dragged')
-        this.dispatchEvent(new CustomEvent('elementdragend', { bubbles: true, composed: true }))
+        this.connectedElement.dispatchEvent(new CustomEvent('elementdragend', { bubbles: true, composed: true }))
     }
-    destroy(): void {
-        this.listeners.destroy();
+    private createDragImage(fontSize: number): HTMLCanvasElement {
+        const canvas = document.createElement('canvas');
+        const text = this._value;
+        if(!text){
+            return canvas;
+        }
+        const size = fontSize * devicePixelRatio;
+        canvas.height = size;
+        canvas.width = size * text.length;
+        const ctx = canvas.getContext('2d')!;
+        ctx.fillStyle = '#000';
+        ctx.font = `${size}px "Courier New", Courier, monospace`
+        ctx.fillText(text, 0, size * 0.9)
+        return canvas;
     }
+
     static create(
-        shadow: ShadowRoot,
-        dispatchEvent: (e: Event) => void
+        connected: ConnectedElement
     ): ConnectedAnagramInputElement {
-        const container = shadow.querySelector('div') as HTMLElement;
+        const container = connected.shadowRoot.querySelector('div') as HTMLElement;
         return new ConnectedAnagramInputElement(
             container,
-            dispatchEvent
+            connected
         );
     }
 }
 
-export class AnagramInputElement extends HTMLElement {
-    private connected: ConnectedAnagramInputElement | undefined
+export class AnagramInputElement extends CustomElement<ConnectedAnagramInputElement, AnagramInputElementEventMap> {
     private _value: string | undefined
 
-    public get value(): string {
+    get value(): string {
         if(!this.connected){
             return this._value || '';
         }
         return this.connected.value;
     }
-    public set value(value: string) {
+    set value(value: string) {
         if(!this.connected){
             this._value = value;
             return;
         }
         this.connected.value = value;
     }
-    public removeCharacter(): void {
+
+    protected createConnected(connected: ConnectedElement): ConnectedAnagramInputElement {
+        const result = ConnectedAnagramInputElement.create(connected);
+        if(this._value) {
+            result.value = this._value;
+        }
+        return result;
+    }
+
+    protected createContent(): Node | undefined {
+        const templateEl = document.getElementById('anagram-input-element-template') as HTMLTemplateElement;
+        return templateEl.content.cloneNode(true);
+    }
+    removeCharacter(): void {
         if(!this.connected){
             return;
         }
         this.connected.removeCharacter();
     }
-    addEventListener<K extends keyof AnagramInputElementEventMap>(type: K, listener: (this: HTMLElement, ev: AnagramInputElementEventMap[K]) => any, options?: boolean | AddEventListenerOptions): void{
-        super.addEventListener(type, listener as (ev: Event) => void, options);
-    }
-    removeEventListener<K extends keyof AnagramInputElementEventMap>(type: K, listener: (this: HTMLElement, ev: AnagramInputElementEventMap[K]) => any, options?: boolean | AddEventListenerOptions): void{
-        super.removeEventListener(type, listener as (ev: Event) => void, options);
-    }
-    protected connectedCallback(){
-        const templateEl = document.getElementById('anagram-input-element-template') as HTMLTemplateElement;
-        const content = templateEl.content.cloneNode(true);
-        const shadow = this.attachShadow({mode: 'open'});
-        shadow.appendChild(content);
-
-        const connected = ConnectedAnagramInputElement.create(
-            shadow,
-            (e) => this.dispatchEvent(e)
-        );
-        this.connected = connected;
-        if(this._value) {
-            connected.value = this._value;
+    displayAddedValuePreview(addedValue: string): void {
+        if(!this.connected){
+            return;
         }
+        this.connected.displayAddedValuePreview(addedValue);
     }
-
-    protected disconnectedCallback() {
-        if(this.connected){
-            this.connected.destroy();
-            this.connected = undefined;
+    hideAddedValuePreview(): void {
+        if(!this.connected){
+            return;
         }
+        this.connected.hideAddedValuePreview();
     }
 }
 
