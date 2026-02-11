@@ -1,29 +1,15 @@
 import { CustomElement, type ConnectedElement } from "./html-utils";
 
-export interface ElementDragStartEvent extends CustomEvent {
-
-}
-
-export interface ElementDragEndEvent extends CustomEvent {
-
-}
-
-export interface ElementDragOverEvent extends CustomEvent {
-
-}
-
-export interface ElementRemovedEvent extends CustomEvent {
-
-}
-
 export interface AnagramInputElementEventMap extends HTMLElementEventMap {
-    'elementdragstart': ElementDragStartEvent
-    'elementremoved': ElementRemovedEvent
-    'elementdragend': ElementDragEndEvent
+    'elementdragstart': CustomEvent
+    'elementremoved': CustomEvent
+    'elementdragend': CustomEvent
+    'elementvaluechanged': CustomEvent
 }
 class ConnectedAnagramInputElement {
     constructor(
         private readonly container: HTMLElement,
+        private readonly textContainer: HTMLElement,
         private readonly connectedElement: ConnectedElement
     ){
         connectedElement.listeners.target(container).addEventListener('dragstart', (e) => this.handleDragStart(e));
@@ -35,20 +21,13 @@ class ConnectedAnagramInputElement {
     }
     set value(value: string) {
         this._value = value;
-        this.container.textContent = value;
+        this.textContainer.textContent = value;
         this.determineLongerValueState(value);
     }
     
-    removeCharacter(): void {
-        if(this.value.length === 1){
-            this.connectedElement.dispatchEvent(new CustomEvent('elementremoved', { bubbles: true, composed: true}))
-            return;
-        }
-        this.value = this.value.slice(0, this.value.length - 1);
-    }
     displayAddedValuePreview(addedValue: string): void {
         const previewValue = `${this._value}${addedValue}`;
-        this.container.textContent = previewValue;
+        this.textContainer.textContent = previewValue;
         this.determineLongerValueState(previewValue);
     }
     hideAddedValuePreview(): void {
@@ -57,9 +36,9 @@ class ConnectedAnagramInputElement {
     private determineLongerValueState(value: string | undefined): void {
         const length = value === undefined ? 0 : value.length;
         if(length > 1){
-            this.connectedElement.internals.states.add('longer-value');
+            this.container.classList.add('longer-value')
         }else{
-            this.connectedElement.internals.states.delete('longer-value');
+            this.container.classList.remove('longer-value')
         }
     }
     private handleDragStart(e: DragEvent): void {
@@ -96,9 +75,11 @@ class ConnectedAnagramInputElement {
     static create(
         connected: ConnectedElement
     ): ConnectedAnagramInputElement {
-        const container = connected.shadowRoot.querySelector('div') as HTMLElement;
+        const container = connected.shadowRoot.getElementById('container') as HTMLElement;
+        const textContainer = connected.shadowRoot.getElementById('text-container') as HTMLElement;
         return new ConnectedAnagramInputElement(
             container,
+            textContainer,
             connected
         );
     }
@@ -114,11 +95,10 @@ export class AnagramInputElement extends CustomElement<ConnectedAnagramInputElem
         return this.connected.value;
     }
     set value(value: string) {
-        if(!this.connected){
-            this._value = value;
-            return;
+        if(this.connected){
+            this.connected.value = value;
         }
-        this.connected.value = value;
+        this._value = value;
     }
 
     protected createConnected(connected: ConnectedElement): ConnectedAnagramInputElement {
@@ -133,12 +113,7 @@ export class AnagramInputElement extends CustomElement<ConnectedAnagramInputElem
         const templateEl = document.getElementById('anagram-input-element-template') as HTMLTemplateElement;
         return templateEl.content.cloneNode(true);
     }
-    removeCharacter(): void {
-        if(!this.connected){
-            return;
-        }
-        this.connected.removeCharacter();
-    }
+
     displayAddedValuePreview(addedValue: string): void {
         if(!this.connected){
             return;

@@ -3,3 +3,19 @@ div.dragged {
     opacity: 0;
     height: 1lh;
 }
+
+.bottom-border-container {
+    height: var(--longer-value-border-width);
+    position: relative;
+}
+
+.bottom-border {
+    position: absolute;
+    height: 100%;
+    left: .05em;
+    right: .05em;
+}
+
+#container.longer-value .bottom-border {
+    background-color: #000;
+}

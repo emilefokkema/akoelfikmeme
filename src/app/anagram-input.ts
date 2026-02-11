@@ -43,7 +43,6 @@ class ConnectedAnagramInput {
         inputTarget.addEventListener('focus', () => this.handleInputFocus());
         inputTarget.addEventListener('blur', () => this.handleInputBlur())
         inputTarget.addEventListener('keydown', (e) => this.handleInputKeydown(e))
-        elementsContainerEventTarget.addEventListener('elementremoved', (e) => this.handleElementRemoved(e))
         elementsContainerEventTarget.addEventListener('elementdragstart', (e) => this.handleElementDragStart(e))
         elementsContainerEventTarget.addEventListener('elementdragend', () => this.handleElementDragEnd())
         overlayElementsContainerTarget.addEventListener('elementdrop', (e) => this.handleElementDrop(e))
@@ -66,8 +65,28 @@ class ConnectedAnagramInput {
         if(this.elements.length === 0) {
             return;
         }
-        const lastElement = this.elements[this.elements.length - 1];
-        lastElement.removeCharacter();
+        const someAreLonger = this.elements.some(e => e.value.length > 1);
+        if(someAreLonger){
+            this.splitLongerElements();
+        }else{
+            this.removeLastElement();
+        }
+        this.dispatchEvent(new CustomEvent('input'));
+    }
+
+    private splitLongerElements(): void {
+        const allCharacters = this.elements.reduce((all, el) => `${all}${el.value}`, '');
+        const newElementValues = getAnagramElementsFromString(allCharacters);
+        const oldElements = this.elements.splice(0, this.elements.length);
+        for(const oldElement of oldElements){
+            oldElement.remove();
+        }
+        for(const value of newElementValues){
+            const newElement = document.createElement('anagram-input-element');
+            newElement.value = value;
+            this.elementsContainer.appendChild(newElement);
+            this.elements.push(newElement);
+        }
     }
 
     private handleInputFocus(): void {
@@ -96,10 +115,6 @@ class ConnectedAnagramInput {
         }
         this.checkEmpty();
         this.dispatchEvent(new CustomEvent('input'));
-    }
-
-    private handleElementRemoved(e: Event): void {
-        this.removeElement(e.target);
     }
 
     private handleElementDragStart(e: Event): void {
@@ -206,7 +221,9 @@ class ConnectedAnagramInput {
         }
         if(e.detail.location === 'after'){
             this.moveDraggedElementAfterElement(element);
+            return;
         }
+        this.moveDraggedElementIntoElement(element);
     }
 
     private moveDraggedElementAfterElement(element: AnagramInputElement): void {
@@ -225,6 +242,19 @@ class ConnectedAnagramInput {
             this.elements.push(draggedElement);
             this.elementsContainer.appendChild(draggedElement)
         }
+        this.dispatchEvent(new CustomEvent('input'));
+    }
+
+    private moveDraggedElementIntoElement(element: AnagramInputElement): void {
+        const draggedElement = this.draggedElement;
+        if(!draggedElement){
+            return;
+        }
+        const index = this.elements.indexOf(draggedElement);
+        this.elements.splice(index, 1);
+        element.value = `${element.value}${draggedElement.value}`;
+        draggedElement.remove();
+        this.handleElementDragEnd();
         this.dispatchEvent(new CustomEvent('input'));
     }
 
@@ -317,18 +347,11 @@ class ConnectedAnagramInput {
         this.draggedElement = undefined;
     }
 
-    private removeElement(element: unknown): void {
-        if(!(element instanceof AnagramInputElement)) {
-            return;
-        }
-        const index = this.elements.indexOf(element);
-        if(index === -1){
-            return;
-        }
-        this.elements.splice(index, 1);
-        element.remove();
+    private removeLastElement(): void {
+        const lastElementIndex = this.elements.length - 1;
+        const [lastElement] = this.elements.splice(lastElementIndex, 1);
+        lastElement.remove();
         this.checkEmpty();
-        this.dispatchEvent(new CustomEvent('input'));
     }
 
     private checkEmpty(): void {
